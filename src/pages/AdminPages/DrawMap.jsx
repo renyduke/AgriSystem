@@ -1,18 +1,30 @@
-import React, { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, LayersControl, LayerGroup, useMap, FeatureGroup } from "react-leaflet";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, LayerGroup, useMap, FeatureGroup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { EditControl } from "react-leaflet-draw";
 import L from "leaflet";
 import "leaflet.motion/dist/leaflet.motion.js";
+
+// Firebase imports (fixed path)
 import { db } from "../../config/firebaseConfig";
-import { collection, onSnapshot, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from "firebase/firestore";
+
 import { FaSearch, FaMapMarkerAlt, FaInfoCircle, FaUser, FaLocationArrow, FaArrowLeft } from "react-icons/fa";
 import { ArrowsPointingOutIcon, ArrowsPointingInIcon } from "@heroicons/react/24/solid";
-import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-// Separate DrawMap Component
+// DrawMap Component
 const DrawMap = () => {
   const [mapRef, setMapRef] = useState(null);
   const [cursorCoords, setCursorCoords] = useState({ lat: null, lng: null });
@@ -25,7 +37,7 @@ const DrawMap = () => {
   const defaultCenter = [10.3860, 123.2220];
   const defaultZoom = 14;
 
-  // Icon fix
+  // Icon fix (run once)
   useEffect(() => {
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
@@ -45,25 +57,33 @@ const DrawMap = () => {
         shapes.forEach(shape => {
           const layer = L.geoJSON(shape.geojson, {
             onEachFeature: (feature, lyr) => {
-              lyr.options.firestoreId = shape.id; // Attach ID for edits
+              lyr.options.firestoreId = shape.id;
               lyr.options.editable = true;
             }
-          }).addTo(drawnItems.current);
+          });
+          if (mapRef) layer.addTo(drawnItems.current);
         });
       }
     }, (err) => console.error("Firestore load error:", err));
     return () => unsubscribe();
   }, [mapRef]);
 
-  // Locate Control
+  // Locate Control (fixed max depth: click-only, stable callback, no auto-call loop)
   const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErrorMessage }) => {
     const map = useMap();
+    const controlRef = useRef(null);
+    const hasLocated = useRef(false);
+
+    const locateUser = useCallback(() => {
+      if (!map || hasLocated.current) return;
+      setErrorMessage("");
+      map.locate({ setView: true, maxZoom: 16, timeout: 10000, enableHighAccuracy: true });
+      hasLocated.current = true;
+    }, [map]);
+
     useEffect(() => {
       if (!map) return;
-      const locateUser = () => {
-        setErrorMessage("");
-        map.locate({ setView: false, maxZoom: 16, timeout: 10000, enableHighAccuracy: true });
-      };
+
       const LocateControl = L.Control.extend({
         options: { position: "topright" },
         onAdd: () => {
@@ -80,33 +100,54 @@ const DrawMap = () => {
           container.style.justifyContent = "center";
           container.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
           container.title = "Locate Me";
-          container.onclick = (e) => { L.DomEvent.stopPropagation(e); locateUser(); };
+          L.DomEvent.on(container, 'click', (e) => { L.DomEvent.stopPropagation(e); locateUser(); });
           return container;
         },
       });
-      const locateControl = new LocateControl();
-      map.addControl(locateControl);
+
+      map.whenReady(() => {
+        if (controlRef.current) return;
+        const locateControl = new LocateControl();
+        map.addControl(locateControl);
+        controlRef.current = locateControl;
+      });
 
       const onLocationFound = (e) => {
         setUserLocation(e.latlng);
-        map.flyTo(e.latlng, 16, { duration: 1.5 });
       };
+      const onLocationError = (e) => {
+        setErrorMessage(`Location error: ${e.message}`);
+        hasLocated.current = false;
+      };
+
       map.on("locationfound", onLocationFound);
-      map.on("locationerror", (e) => setErrorMessage(`Location error: ${e.message}`));
-      locateUser();
+      map.on("locationerror", onLocationError);
+
+      // Optional auto-locate on mount (uncomment if needed, but may cause re-renders)
+      // if (!userLocation) locateUser();
 
       return () => {
         map.off("locationfound", onLocationFound);
-        map.removeControl(locateControl);
+        map.off("locationerror", onLocationError);
+        if (controlRef.current) {
+          map.removeControl(controlRef.current);
+          controlRef.current = null;
+        }
+        hasLocated.current = false;
       };
-    }, [map, setUserLocation, setErrorMessage]);
+    }, [map, locateUser]);
+
     return null;
   };
 
   // Print Control
   const PrintControl = () => {
     const map = useMap();
+    const controlRef = useRef(null);
+
     useEffect(() => {
+      if (!map) return;
+
       const PrintCtrl = L.Control.extend({
         options: { position: "topright" },
         onAdd: () => {
@@ -123,14 +164,26 @@ const DrawMap = () => {
           container.style.justifyContent = "center";
           container.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>';
           container.title = "Print Map";
-          container.onclick = (e) => { L.DomEvent.stopPropagation(e); window.print(); };
+          L.DomEvent.on(container, 'click', (e) => { L.DomEvent.stopPropagation(e); window.print(); });
           return container;
         },
       });
-      const printCtrl = new PrintCtrl();
-      map.addControl(printCtrl);
-      return () => map.removeControl(printCtrl);
+
+      map.whenReady(() => {
+        if (controlRef.current) return;
+        const printCtrl = new PrintCtrl();
+        map.addControl(printCtrl);
+        controlRef.current = printCtrl;
+      });
+
+      return () => {
+        if (controlRef.current) {
+          map.removeControl(controlRef.current);
+          controlRef.current = null;
+        }
+      };
     }, [map]);
+
     return null;
   };
 
@@ -164,26 +217,13 @@ const DrawMap = () => {
     const style = document.createElement("style");
     style.innerHTML = `
       @media print {
-        body > *:not(.leaflet-container) {
-          display: none !important;
-        }
-        .leaflet-container {
-          height: 100vh !important;
-          width: 100vw !important;
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-        }
+        body > *:not(.leaflet-container) { display: none !important; }
+        .leaflet-container { height: 100vh !important; width: 100vw !important; position: fixed !important; top: 0 !important; left: 0 !important; }
         .leaflet-draw-toolbar, .leaflet-control { display: none !important; }
       }
       .fullscreen-mode .non-map { display: none !important; }
       .fullscreen-mode .leaflet-container {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 9999 !important;
+        position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 9999 !important;
       }
     `;
     document.head.appendChild(style);
@@ -205,9 +245,8 @@ const DrawMap = () => {
         </header>
 
         <div className="bg-white/90 rounded-2xl shadow-2xl overflow-hidden h-[600px] map-container">
-          <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: "100%", width: "100%" }} whenCreated={setMapRef} zoomControl={false}>
+          <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: "100%", width: "100%" }} whenCreated={setMapRef} zoomControl={true}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
-            <ZoomControl position="toprize" />
             <LocateUserControl userLocation={userLocation} setUserLocation={setUserLocation} errorMessage={errorMessage} setErrorMessage={setErrorMessage} />
             <PrintControl />
 
@@ -219,7 +258,7 @@ const DrawMap = () => {
                   console.log('Created:', geojson);
                   try {
                     const docRef = await addDoc(collection(db, 'drawnShapes'), { geojson, createdAt: new Date() });
-                    e.layer.options.firestoreId = docRef.id; // Store ID on layer
+                    e.layer.options.firestoreId = docRef.id;
                   } catch (err) {
                     console.error('Save error:', err);
                   }
@@ -252,36 +291,15 @@ const DrawMap = () => {
                   });
                 }}
                 draw={{
-                  rectangle: {
-                    shapeOptions: {
-                      color: '#3388ff',
-                      weight: 4,
-                      opacity: 0.5,
-                      fillOpacity: 0.2,
-                    },
-                  },
-                  polygon: {
-                    allowIntersection: false,
-                    shapeOptions: {
-                      color: '#3388ff',
-                      weight: 4,
-                      opacity: 0.5,
-                      fillOpacity: 0.2,
-                    },
-                  },
+                  rectangle: { shapeOptions: { color: '#3388ff', weight: 4, opacity: 0.5, fillOpacity: 0.2 } },
+                  polygon: { allowIntersection: false, shapeOptions: { color: '#3388ff', weight: 4, opacity: 0.5, fillOpacity: 0.2 } },
                   marker: { icon: createUserIcon() },
                   polyline: false,
                   circle: false,
                   circlemarker: false,
                 }}
                 edit={{
-                  edit: {
-                    selectedPathOptions: { // NESTED FIX: This resolves the error
-                      maintainColor: true,
-                      opacity: 0.8,
-                      weight: 6,
-                    },
-                  },
+                  edit: { selectedPathOptions: { maintainColor: true, opacity: 0.8, weight: 6 } },
                   remove: true,
                   poly: null,
                 }}

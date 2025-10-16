@@ -19,6 +19,7 @@ import Settings from "./pages/AdminPages/Settings";
 import LogOut from "./pages/AdminPages/Logout";
 import DesasterReport from "./pages/AdminPages/DisasterReport";
 import Drawmap from "./pages/AdminPages/DrawMap";
+import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
           <Route path="usermanagement" element={<UserManagement />} />
           <Route path="farmerregister" element={<FarmerRegister />} />
           <Route path="reports" element={<Reports />} />
+           <Route path="suggest-farmer" element={<SuggestFarmer />} />
           <Route path="desaster" element={<DesasterReport />} />
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />

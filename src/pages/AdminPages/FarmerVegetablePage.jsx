@@ -1,152 +1,119 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../config/firebaseConfig";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { FaTractor, FaArrowLeft, FaBars } from "react-icons/fa";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import { FaTractor, FaArrowLeft } from "react-icons/fa";
 
-// Custom CSS for animations
+/* ------------------------------------------------------------------ */
+/*  Custom animation styles (kept in a <style> tag for simplicity)   */
+/* ------------------------------------------------------------------ */
 const customStyles = `
   @keyframes slideIn {
     from { opacity: 0; transform: translateX(20px); }
-    to { opacity: 1; transform: translateX(0); }
+    to   { opacity: 1; transform: translateX(0); }
   }
-  .animate-slide-in {
-    animation: slideIn 0.5s ease-out;
-  }
+  .animate-slide-in { animation: slideIn 0.5s ease-out; }
   @keyframes fadeIn {
     from { opacity: 0; }
-    to { opacity: 1; }
+    to   { opacity: 1; }
   }
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-in;
-  }
+  .animate-fade-in { animation: fadeIn 0.3s ease-in; }
 `;
 
+/* ------------------------------------------------------------------ */
+/*  Main page component                                               */
+/* ------------------------------------------------------------------ */
 const FarmerVegetablePage = () => {
   const [vegetableOptions, setVegetableOptions] = useState([]);
   const [selectedVegetable, setSelectedVegetable] = useState("");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loadingVegetables, setLoadingVegetables] = useState(true);
   const navigate = useNavigate();
 
+  /* -------------------------------------------------------------- */
+  /*  Fetch the list of vegetables from Firestore                  */
+  /* -------------------------------------------------------------- */
   useEffect(() => {
     const fetchVegetables = async () => {
       try {
         setLoadingVegetables(true);
-        const veggieSnapshot = await getDocs(collection(db, "vegetables_list"));
-        const veggieList = veggieSnapshot.docs.map(doc => doc.data().name);
-        setVegetableOptions(veggieList);
-        setSelectedVegetable(veggieList[0] || ""); // Default to first vegetable or empty string
-      } catch (error) {
-        console.error("Error fetching vegetables:", error);
+        const snap = await getDocs(collection(db, "vegetables_list"));
+        const list = snap.docs.map((doc) => doc.data().name);
+        setVegetableOptions(list);
+        setSelectedVegetable(list[0] || "");
+      } catch (err) {
+        console.error("Error fetching vegetables:", err);
       } finally {
         setLoadingVegetables(false);
       }
     };
-
     fetchVegetables();
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex flex-col overflow-hidden">
       <style>{customStyles}</style>
 
-      {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 w-64 bg-gradient-to-b from-green-100 to-green-200 shadow-2xl transform ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 transition-transform duration-300 ease-in-out z-40 flex flex-col`}
-      >
-        <div className="p-6 border-b border-green-300 bg-green-800/10">
-          <h2 className="text-2xl font-bold text-green-900 flex items-center">
-            <FaTractor className="mr-2 text-green-700" />
-            <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-              Farm Menu
-            </span>
-          </h2>
-        </div>
-        {loadingVegetables ? (
-          <div className="p-4 text-center text-green-800">Loading vegetables...</div>
-        ) : (
-          <VegetableSelection
-            vegetableOptions={vegetableOptions}
-            selectedVegetable={selectedVegetable}
-            onSelectVegetable={(veg) => {
-              setSelectedVegetable(veg);
-              setIsSidebarOpen(false);
-            }}
-          />
-        )}
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 p-6 md:pl-72 transition-all duration-300 relative z-30">
-        {/* Mobile Sidebar Toggle */}
-        <button
-          className="md:hidden fixed top-4 left-4 z-50 text-green-700 hover:text-green-900 bg-white/80 rounded-full p-2 shadow-md hover:shadow-lg transition-all duration-200"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          <FaBars className="text-2xl" />
-        </button>
-
-        {/* Back to Main Page Button */}
-        <div className="mb-6">
+      {/* ---------------------------------------------------------- */}
+      {/*  Header area – Back button + Vegetable selector            */}
+      {/* ---------------------------------------------------------- */}
+      <header className="bg-white/80 backdrop-blur-sm shadow-md p-4 sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          {/* Back button */}
           <button
             onClick={() => navigate("/home")}
-            className="flex items-center space-x-2 text-green-700 hover:text-green-900 bg-white rounded-lg px-4 py-2 shadow-md hover:shadow-lg transition-all duration-200"
+            className="flex items-center space-x-2 text-green-700 hover:text-green-900 bg-white rounded-lg px-4 py-2 shadow hover:shadow-lg transition"
           >
             <FaArrowLeft className="text-lg" />
             <span>Back to Main Page</span>
           </button>
+
+          {/* Vegetable selector */}
+          <div className="flex-1 max-w-md">
+            {loadingVegetables ? (
+              <p className="text-green-800 animate-pulse">Loading vegetables…</p>
+            ) : (
+              <select
+                value={selectedVegetable}
+                onChange={(e) => setSelectedVegetable(e.target.value)}
+                className="w-full p-2 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-green-800"
+              >
+                {vegetableOptions.length === 0 ? (
+                  <option disabled>No vegetables found</option>
+                ) : (
+                  vegetableOptions.map((veg) => (
+                    <option key={veg} value={veg}>
+                      {veg}
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
+          </div>
         </div>
+      </header>
 
+      {/* ---------------------------------------------------------- */}
+      {/*  Main content – Farmers list (only rendered when a veg   */}
+      {/*  has been chosen)                                        */}
+      {/* ---------------------------------------------------------- */}
+      <main className="flex-1 p-6">
         {selectedVegetable && (
-          <FarmersList
-            vegetable={selectedVegetable}
-            onBack={() => setIsSidebarOpen(true)}
-          />
+          <FarmersList vegetable={selectedVegetable} />
         )}
-      </div>
-
-      {/* Overlay for mobile sidebar */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      </main>
     </div>
   );
 };
 
-const VegetableSelection = ({ vegetableOptions, selectedVegetable, onSelectVegetable }) => {
-  return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="space-y-2">
-        {vegetableOptions.length > 0 ? (
-          vegetableOptions.map((vegetable) => (
-            <button
-              key={vegetable}
-              onClick={() => onSelectVegetable(vegetable)}
-              className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 bg-white/90 shadow-sm hover:shadow-md ${
-                selectedVegetable === vegetable
-                  ? "bg-green-600 text-white"
-                  : "text-green-800 hover:bg-green-50"
-              }`}
-            >
-              <FaTractor className={`text-lg ${selectedVegetable === vegetable ? "text-white" : "text-green-600"}`} />
-              <span className="font-medium">{vegetable}</span>
-            </button>
-          ))
-        ) : (
-          <p className="text-green-800 text-center">No vegetables available</p>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const FarmersList = ({ vegetable, onBack }) => {
+/* ------------------------------------------------------------------ */
+/*  Farmers list component                                            */
+/* ------------------------------------------------------------------ */
+const FarmersList = ({ vegetable }) => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -154,28 +121,34 @@ const FarmersList = ({ vegetable, onBack }) => {
     const fetchFarmers = async () => {
       try {
         setLoading(true);
-        const vegetablesQuery = query(collection(db, "vegetables"), where("name", "==", vegetable));
-        const vegetablesSnapshot = await getDocs(vegetablesQuery);
 
-        const farmerIds = vegetablesSnapshot.docs.map((doc) => doc.data().farmerId);
+        /* 1. Find vegetable docs that match the selected name */
+        const vegQuery = query(
+          collection(db, "vegetables"),
+          where("name", "==", vegetable)
+        );
+        const vegSnap = await getDocs(vegQuery);
+        const farmerIds = vegSnap.docs.map((d) => d.data().farmerId);
 
         if (farmerIds.length === 0) {
           setFarmers([]);
-          setLoading(false);
           return;
         }
 
-        const farmersQuery = query(collection(db, "farmers"), where("__name__", "in", farmerIds));
-        const farmersSnapshot = await getDocs(farmersQuery);
+        /* 2. Pull the farmer docs (Firestore "in" query limit = 10) */
+        const farmerQuery = query(
+          collection(db, "farmers"),
+          where("__name__", "in", farmerIds.slice(0, 10)) // adjust if you need pagination
+        );
+        const farmerSnap = await getDocs(farmerQuery);
 
-        const farmersData = farmersSnapshot.docs.map((doc) => ({
+        const data = farmerSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
-
-        setFarmers(farmersData); // No sorting by experience
-      } catch (error) {
-        console.error("Error fetching farmers: ", error);
+        setFarmers(data);
+      } catch (err) {
+        console.error("Error fetching farmers:", err);
       } finally {
         setLoading(false);
       }
@@ -185,56 +158,46 @@ const FarmersList = ({ vegetable, onBack }) => {
   }, [vegetable]);
 
   return (
-    <div className="max-w-5xl mx-auto mt-8 animate-slide-in">
+    <section className="max-w-5xl mx-auto animate-slide-in">
       <div className="bg-white rounded-2xl shadow-xl p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-green-800">
-            Farmers Producing <span className="text-green-600">{vegetable}</span>
-          </h2>
-          <button
-            className="md:hidden flex items-center space-x-2 text-green-700 hover:text-green-900"
-            onClick={onBack}
-          >
-            <FaArrowLeft />
-            <span>Menu</span>
-          </button>
-        </div>
+        <h2 className="text-3xl font-bold text-green-800 mb-6">
+          Farmers producing <span className="text-green-600">{vegetable}</span>
+        </h2>
 
+        {/* Loading spinner */}
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent" />
           </div>
         ) : farmers.length > 0 ? (
+          /* Grid of farmer cards */
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {farmers.map((farmer) => (
               <div
                 key={farmer.id}
-                className="bg-gradient-to-br from-green-50 to-white rounded-xl p-5 
-                  shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-gradient-to-br from-green-50 to-white rounded-xl p-5 shadow-md hover:shadow-lg transition-transform hover:-translate-y-1"
               >
-                <div className="mb-3">
-                  <p className="text-lg font-semibold text-green-800">{farmer.fullName}</p>
-                </div>
-                <div className="space-y-1 text-sm">
-                  <p className="text-gray-600">
+                <p className="text-lg font-semibold text-green-800">{farmer.fullName}</p>
+                <div className="mt-2 space-y-1 text-sm text-gray-600">
+                  <p>
                     <span className="font-medium">Location:</span> {farmer.farmLocation}
                   </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Farm Size:</span> {farmer.farmSizeHectares || farmer.farmSize} hectares
+                  <p>
+                    <span className="font-medium">Farm size:</span>{" "}
+                    {farmer.farmSizeHectares || farmer.farmSize} ha
                   </p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">
-              No farmers found producing {vegetable} at this time.
-            </p>
-          </div>
+          /* Empty state */
+          <p className="text-center text-gray-600 py-12">
+            No farmers found producing <strong>{vegetable}</strong> at this time.
+          </p>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 

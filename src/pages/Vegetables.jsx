@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from "react"; // Added React import
+import React, { useState, useEffect } from "react";
 import { db } from "../config/firebaseConfig";
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { FaPlus, FaTrash, FaEdit, FaInfoCircle, FaLeaf } from "react-icons/fa";
 
 // Basic Error Boundary Component
@@ -30,9 +37,10 @@ const Vegetables = () => {
   const [newVeggieName, setNewVeggieName] = useState("");
   const [newVeggieHarvestAfter, setNewVeggieHarvestAfter] = useState("");
   const [editingVeggie, setEditingVeggie] = useState(null);
-  const [editVeggieName, setEditVeggieName] = useState("");
-  const [editVeggieHarvestAfter, setEditVeggieHarvestAfter] = useState("");
+  const [editVeggieName, setEditVeggieName] = useState(""); // Added missing useState
+  const [editVeggieHarvestAfter, setEditVeggieHarvestAfter] = useState(""); // Added missing useState
   const [showSuccess, setShowSuccess] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetchVegetables();
@@ -42,7 +50,7 @@ const Vegetables = () => {
     try {
       setLoading(true);
       const veggieSnapshot = await getDocs(collection(db, "vegetables_list"));
-      const veggieList = veggieSnapshot.docs.map(doc => ({
+      const veggieList = veggieSnapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name,
         harvestAfter: doc.data().harvestAfter || 60,
@@ -63,7 +71,7 @@ const Vegetables = () => {
       !newVeggieHarvestAfter ||
       isNaN(newVeggieHarvestAfter) ||
       newVeggieHarvestAfter <= 0 ||
-      vegetables.some(v => v.name.toLowerCase() === newVeggieName.trim().toLowerCase())
+      vegetables.some((v) => v.name.toLowerCase() === newVeggieName.trim().toLowerCase())
     ) {
       alert("Please enter a unique vegetable name and a valid harvest duration (positive number of days)");
       return;
@@ -95,7 +103,9 @@ const Vegetables = () => {
       !isNaN(editVeggieHarvestAfter) &&
       editVeggieHarvestAfter > 0 &&
       (editVeggieName !== veggie.name || editVeggieHarvestAfter !== veggie.harvestAfter) &&
-      !vegetables.some(v => v.name.toLowerCase() === editVeggieName.trim().toLowerCase() && v.id !== veggie.id)
+      !vegetables.some(
+        (v) => v.name.toLowerCase() === editVeggieName.trim().toLowerCase() && v.id !== veggie.id
+      )
     ) {
       try {
         setLoading(true);
@@ -139,40 +149,173 @@ const Vegetables = () => {
     }
   };
 
+  // Filter vegetables based on search term
+  const filteredVegetables = vegetables.filter((veg) =>
+    veg.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 p-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-green-800 mb-6 flex items-center">
-              <FaLeaf className="mr-2 text-green-600" /> Vegetable List Management
-            </h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-green-800 flex items-center">
+                <FaLeaf className="mr-2 text-green-600" /> Vegetable List Management
+              </h2>
+              <button
+                onClick={() => document.getElementById("addVeggieForm").scrollIntoView({ behavior: "smooth" })}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200 transform hover:scale-105 flex items-center gap-2"
+                disabled={loading}
+              >
+                <FaPlus /> Add Vegetable
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-6">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search vegetables..."
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
+                disabled={loading}
+              />
+            </div>
+
+            {/* Table */}
+            {loading ? (
+              <div className="text-center py-6 text-gray-600">Loading...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-green-100 text-green-800">
+                      <th className="p-2 border-b text-left">Vegetable</th>
+                      <th className="p-2 border-b text-left">Harvest Duration (days)</th>
+                      <th className="p-2 border-b text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredVegetables.map((vegetable) => (
+                      <tr key={vegetable.id} className="hover:bg-green-50 transition-colors">
+                        {editingVeggie?.id === vegetable.id ? (
+                          <td colSpan="3" className="p-4 bg-white">
+                            <div className="space-y-2">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Vegetable Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editVeggieName}
+                                  onChange={(e) => setEditVeggieName(e.target.value)}
+                                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Harvest Duration (days)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={editVeggieHarvestAfter}
+                                  onChange={(e) => setEditVeggieHarvestAfter(e.target.value)}
+                                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                  min="1"
+                                />
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => handleEditVegetable(vegetable)}
+                                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingVeggie(null);
+                                    setEditVeggieName("");
+                                    setEditVeggieHarvestAfter("");
+                                  }}
+                                  className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        ) : (
+                          <>
+                            <td className="p-2 border-b">
+                              <span className="text-gray-800">{vegetable.name}</span>
+                            </td>
+                            <td className="p-2 border-b">
+                              <span className="text-gray-800">{vegetable.harvestAfter}</span>
+                            </td>
+                            <td className="p-2 border-b">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingVeggie(vegetable);
+                                    setEditVeggieName(vegetable.name);
+                                    setEditVeggieHarvestAfter(vegetable.harvestAfter);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Edit"
+                                >
+                                  <FaEdit />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteVegetable(vegetable.id)}
+                                  className="text-red-500 hover:text-red-700"
+                                  title="Delete"
+                                >
+                                  <FaTrash />
+                                </button>
+                                <button className="text-gray-500 hover:text-gray-700" title="View Info">
+                                  <FaInfoCircle />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredVegetables.length === 0 && (
+                  <p className="text-center py-4 text-gray-600">No vegetables found.</p>
+                )}
+              </div>
+            )}
 
             {/* Add Vegetable Form */}
-            <div className="mb-8 p-4 bg-white/80 rounded-lg shadow-inner">
+            <div id="addVeggieForm" className="mt-6 p-4 bg-white/80 rounded-lg shadow-inner">
               <form onSubmit={handleAddVegetable} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
                     Vegetable Name
                   </label>
                   <input
                     type="text"
                     value={newVeggieName}
                     onChange={(e) => setNewVeggieName(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200 disabled:opacity-50"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
                     placeholder="Enter vegetable name"
                     disabled={loading}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
                     Harvest Duration (days)
                   </label>
                   <input
                     type="number"
                     value={newVeggieHarvestAfter}
                     onChange={(e) => setNewVeggieHarvestAfter(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200 disabled:opacity-50"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
                     placeholder="Days to harvest"
                     min="1"
                     disabled={loading}
@@ -181,7 +324,7 @@ const Vegetables = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200 transform hover:scale-105 disabled:bg-gray-400 flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2"
                 >
                   <FaPlus /> Add Vegetable
                 </button>
@@ -192,100 +335,6 @@ const Vegetables = () => {
                 </div>
               )}
             </div>
-
-            {/* Vegetable List */}
-            {loading ? (
-              <div className="text-center py-6 text-gray-600">Loading...</div>
-            ) : (
-              <div className="grid gap-4">
-                {vegetables.map((vegetable) => (
-                  <div
-                    key={vegetable.id}
-                    className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 border border-gray-100"
-                  >
-                    {editingVeggie?.id === vegetable.id ? (
-                      <div className="space-y-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Vegetable Name
-                          </label>
-                          <input
-                            type="text"
-                            value={editVeggieName}
-                            onChange={(e) => setEditVeggieName(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            placeholder="Enter vegetable name"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Harvest Duration (days)
-                          </label>
-                          <input
-                            type="number"
-                            value={editVeggieHarvestAfter}
-                            onChange={(e) => setEditVeggieHarvestAfter(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            placeholder="Days to harvest"
-                            min="1"
-                          />
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            onClick={() => handleEditVegetable(vegetable)}
-                            className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingVeggie(null);
-                              setEditVeggieName("");
-                              setEditVeggieHarvestAfter("");
-                            }}
-                            className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-all duration-200"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-medium text-gray-800">
-                          {vegetable.name} ({vegetable.harvestAfter} days)
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingVeggie(vegetable);
-                              setEditVeggieName(vegetable.name);
-                              setEditVeggieHarvestAfter(vegetable.harvestAfter);
-                            }}
-                            className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                            title="Edit Vegetable"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteVegetable(vegetable.id)}
-                            className="text-red-500 hover:text-red-700 transition-colors duration-200"
-                            title="Delete Vegetable"
-                          >
-                            <FaTrash />
-                          </button>
-                          <button
-                            className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                            title="View Info"
-                          >
-                            <FaInfoCircle />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

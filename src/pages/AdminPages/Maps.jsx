@@ -431,20 +431,8 @@ const Maps = () => {
             )}
           </div>
           <div className="flex gap-4">
-            <button
-              onClick={() => setMapMode("view")}
-              className={`px-4 py-2 rounded-full font-semibold transition-colors ${mapMode === "view" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800 hover:bg-gray-300"}`}
-            >
-              View Mode
-            </button>
-           <Link
-  to="/home/drawmap"
-  className={`px-4 py-2 rounded-full font-semibold transition-colors inline-block text-center ${
-    mapMode === "draw" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-  }`}
->
-  Draw Mode
-</Link>
+          
+       
           </div>
         </header>
 
