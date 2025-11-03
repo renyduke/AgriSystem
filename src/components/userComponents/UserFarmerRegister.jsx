@@ -20,9 +20,11 @@ const FarmerRegister = () => {
     farmSitio: "",
     hectares: "",
     season: "Default",
+    landOwnership: "", // Added Land Ownership
+    farmType: "", // Added Farm Type
     mainCrops: [],
     area: [],
-    coordinates: [10.3860, 123.2220], // Default coordinates
+    coordinates: [10.3860, 123.2220],
   });
   const [selectedAddressBarangay, setSelectedAddressBarangay] = useState("");
   const [selectedFarmBarangay, setSelectedFarmBarangay] = useState("");
@@ -250,6 +252,16 @@ const FarmerRegister = () => {
       return;
     }
 
+    if (!farmerData.landOwnership) {
+      setError("Please select land ownership type.");
+      return;
+    }
+
+    if (!farmerData.farmType) {
+      setError("Please select farm type.");
+      return;
+    }
+
     if (isGeocoding) {
       setError("Please wait for location data to process.");
       return;
@@ -262,13 +274,15 @@ const FarmerRegister = () => {
         return acc;
       }, {});
 
-      console.log("Submitting farmer data:", { ...farmerData, mainCrops: flattenedCrops }); // Debug log
+      console.log("Submitting farmer data:", { ...farmerData, mainCrops: flattenedCrops });
       const farmerRef = await addDoc(collection(db, "farmers"), {
         ...farmerData,
         fullName: `${capitalizeFirstLetter(farmerData.firstName)} ${capitalizeFirstLetter(farmerData.lastName)}`,
         address: `${farmerData.addressBarangay}, ${farmerData.addressSitio}, Canlaon City`,
         farmLocation: `${farmerData.farmBarangay}, ${farmerData.farmSitio}, Canlaon City`,
         hectares: parseFloat(farmerData.hectares),
+        landOwnership: farmerData.landOwnership, // Added to Firestore
+        farmType: farmerData.farmType, // Added to Firestore
         mainCrops: flattenedCrops,
         area: farmerData.area,
       });
@@ -298,6 +312,8 @@ const FarmerRegister = () => {
         farmSitio: "",
         hectares: "",
         season: "Default",
+        landOwnership: "",
+        farmType: "",
         mainCrops: [],
         area: [],
         coordinates: [10.3860, 123.2220],
@@ -485,6 +501,34 @@ const FarmerRegister = () => {
             </select>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <select
+              name="landOwnership"
+              value={farmerData.landOwnership}
+              onChange={handleChange}
+              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+              required
+            >
+              <option value="">Select Land Ownership</option>
+              <option value="Owned">Owned</option>
+              <option value="Tenant">Tenant</option>
+              <option value="Lessee">Lessee</option>
+            </select>
+            <select
+              name="farmType"
+              value={farmerData.farmType}
+              onChange={handleChange}
+              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+              required
+            >
+              <option value="">Select Farm Type</option>
+              <option value="Irrigated">Irrigated</option>
+              <option value="Rainfed">Rainfed</option>
+              <option value="Upland">Upland</option>
+              <option value="Lowland">Lowland</option>
+            </select>
+          </div>
+
           {farmerData.coordinates && showMapPreview && (
             <div className="mt-4">
               <h3 className="text-lg font-semibold text-green-800 mb-2">Map Preview (Verify Coordinates)</h3>
@@ -494,6 +538,8 @@ const FarmerRegister = () => {
                   <Popup>
                     Farm Location: {farmerData.farmSitio}, {farmerData.farmBarangay}, Canlaon City <br />
                     Coordinates: {farmerData.coordinates[0]}, {farmerData.coordinates[1]} <br />
+                    Land Ownership: {farmerData.landOwnership} <br />
+                    Farm Type: {farmerData.farmType} <br />
                     (Check if this matches the expected location.)
                   </Popup>
                 </Marker>

@@ -17,7 +17,7 @@ import Reports from "./pages/AdminPages/Reports";
 import ErrorBoundary from "./ErrorBoundary";
 import Settings from "./pages/AdminPages/Settings";
 import LogOut from "./pages/AdminPages/Logout";
-import DesasterReport from "./pages/AdminPages/DisasterReport";
+import DamageReport from "./pages/AdminPages/Damage Report";
 import Drawmap from "./pages/AdminPages/DrawMap";
 import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 
@@ -50,7 +50,7 @@ function App() {
           <Route path="farmerregister" element={<FarmerRegister />} />
           <Route path="reports" element={<Reports />} />
            <Route path="suggest-farmer" element={<SuggestFarmer />} />
-          <Route path="desaster" element={<DesasterReport />} />
+          <Route path="damagereport" element={<DamageReport />} />
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />
           <Route path="farmer" element={<Farmer />} />

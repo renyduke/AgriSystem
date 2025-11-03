@@ -251,18 +251,51 @@ const Sidebar = () => {
             <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">APPS</li>
 
             {/* Farmer Profile */}
-            <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-              <NavLink to="/home/farmer" className={({ isActive }) => `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`} onMouseEnter={() => setTooltip(collapsed ? "farmer" : null)} onMouseLeave={() => setTooltip(null)}>
-                {({ isActive }) => (
-                  <motion.div variants={itemVariants} animate={isActive ? "active" : "initial"} className="flex items-center gap-2 w-full">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>Farmer Profile</span>
-                  </motion.div>
-                )}
-              </NavLink>
-            </motion.li>
+           <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+  <NavLink
+    to="/home/farmer"
+    className={({ isActive }) =>
+      `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${
+        isActive ? "bg-green-600" : ""
+      }`
+    }
+    onMouseEnter={() => setTooltip(collapsed ? "farmer" : null)}
+    onMouseLeave={() => setTooltip(null)}
+  >
+    {({ isActive }) => (
+      <motion.div
+        variants={itemVariants}
+        animate={isActive ? "active" : "initial"}
+        className="flex items-center gap-2 w-full"
+      >
+        {/* Farmer Hat Icon */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="w-4 h-4 flex-shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 2a9 9 0 019 9v3H3v-3a9 9 0 019-9zm0 0c-3.866 0-7 3.134-7 7v3h14v-3c0-3.866-3.134-7-7-7zm0 11v6m-3 0h6"
+          />
+        </svg>
+
+        <span
+          className={`${
+            collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+          }`}
+        >
+          Farmer Profile
+        </span>
+      </motion.div>
+    )}
+  </NavLink>
+</motion.li>
+
 
             {/* User Management */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
@@ -300,18 +333,43 @@ const Sidebar = () => {
             </motion.li>
 
             {/* Disaster Report */}
-            <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-              <NavLink to="/home/desaster" className={({ isActive }) => `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`} onMouseEnter={() => setTooltip(collapsed ? "desaster" : null)} onMouseLeave={() => setTooltip(null)}>
-                {({ isActive }) => (
-                  <motion.div variants={itemVariants} animate={isActive ? "active" : "initial"} className="flex items-center gap-2 w-full">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
-                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>Disaster Report</span>
-                  </motion.div>
-                )}
-              </NavLink>
-            </motion.li>
+          <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+  <NavLink 
+    to="/home/damagereport" 
+    className={({ isActive }) => 
+      `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
+    }
+    onMouseEnter={() => setTooltip(collapsed ? "Damage Report" : null)} 
+    onMouseLeave={() => setTooltip(null)}
+  >
+    {({ isActive }) => (
+      <motion.div 
+        variants={itemVariants} 
+        animate={isActive ? "active" : "initial"} 
+        className="flex items-center gap-2 w-full"
+      >
+        {/* Alert Triangle Icon */}
+        <svg 
+          className="w-4 h-4 flex-shrink-0" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0zM12 9v4m0 4h.01" 
+          />
+        </svg>
+        <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>
+          Damage Report
+        </span>
+      </motion.div>
+    )}
+  </NavLink>
+</motion.li>
+
 
             <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">OTHER</li>
 

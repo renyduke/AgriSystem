@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, LayersControl, LayerGroup, useMap, FeatureGroup } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-markercluster";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { EditControl } from "react-leaflet-draw";
 import L from "leaflet";
 import "leaflet.motion/dist/leaflet.motion.js";
@@ -23,7 +26,7 @@ const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErr
 
     const locateUser = () => {
       setErrorMessage("");
-      map.locate({ setView: false, maxZoom: 16, timeout: 10000, enableHighAccuracy: true }); // setView: false to control animation manually
+      map.locate({ setView: false, maxZoom: 16, timeout: 10000, enableHighAccuracy: true });
     };
 
     // Create custom control button for Locate Me
@@ -37,7 +40,7 @@ const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErr
         container.style.width = "34px";
         container.style.height = "34px";
         container.style.cursor = "pointer";
-        container.style.marginTop = "10px"; // Space from zoom controls
+        container.style.marginTop = "10px";
         container.style.display = "flex";
         container.style.alignItems = "center";
         container.style.justifyContent = "center";
@@ -62,7 +65,7 @@ const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErr
         container.style.width = "34px";
         container.style.height = "34px";
         container.style.cursor = "pointer";
-        container.style.marginTop = "54px"; // Space below locate button
+        container.style.marginTop = "54px";
         container.style.display = "flex";
         container.style.alignItems = "center";
         container.style.justifyContent = "center";
@@ -84,7 +87,6 @@ const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErr
     const onLocationFound = (e) => {
       const { lat, lng } = e.latlng;
       setUserLocation({ lat, lng });
-      // Smooth flyTo animation to user location
       map.flyTo(e.latlng, 16, { duration: 1.5 });
     };
 
@@ -96,7 +98,6 @@ const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErr
     map.on("locationfound", onLocationFound);
     map.on("locationerror", onLocationError);
 
-    // Auto-locate on initial load
     locateUser();
 
     return () => {
@@ -132,6 +133,8 @@ const Maps = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [userLocation, setUserLocation] = useState(null);
   const [mapMode, setMapMode] = useState("view");
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [pendingSearch, setPendingSearch] = useState("");
   const searchRef = useRef(null);
   const drawnItems = useRef(null);
   const defaultCenter = [10.3860, 123.2220];
@@ -184,7 +187,6 @@ const Maps = () => {
         ...doc.data(),
       }));
 
-      // Enrich each farmer with actual mainCrops array from vegetables
       const enrichedFarmers = await Promise.all(
         farmersData.map(async (farmer) => {
           const vegetableQuery = query(
@@ -214,7 +216,7 @@ const Maps = () => {
             hectares: farmer.hectares || 0,
             season: farmer.season || "Default",
             farmLocation: farmer.farmLocation || "N/A",
-            mainCrops, // Attach full crops for potential future use
+            mainCrops,
           };
         })
       );
@@ -227,7 +229,7 @@ const Maps = () => {
 
   // Auto-zoom to fit all markers on load or update
   useEffect(() => {
-    if (mapRef && farmers.length > 0) {
+    if (isMapReady && mapRef && farmers.length > 0) {
       let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
       if (userLocation) {
         boundsArray.push(userLocation);
@@ -235,7 +237,7 @@ const Maps = () => {
       const bounds = L.latLngBounds(boundsArray);
       mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
     }
-  }, [mapRef, farmers, userLocation]);
+  }, [isMapReady, mapRef, farmers, userLocation]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -302,15 +304,18 @@ const Maps = () => {
 
   // Handle search input
   const handleSearch = (event) => {
-    const searchTerm = event.target.value.toLowerCase();
+    const searchTerm = event.target.value;
     setSearch(searchTerm);
+    const lowerTerm = searchTerm.toLowerCase();
     setIsDropdownOpen(true);
     setErrorMessage("");
+
     const filteredFarmers = farmers.filter((f) =>
-      f.name.toLowerCase().includes(searchTerm) ||
-      f.farmLocation.toLowerCase().includes(searchTerm)
+      f.name.toLowerCase().includes(lowerTerm) ||
+      f.farmLocation.toLowerCase().includes(lowerTerm)
     );
     setSuggestions(filteredFarmers);
+
     if (searchTerm === "" && mapRef) {
       let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
       if (userLocation) boundsArray.push(userLocation);
@@ -325,62 +330,72 @@ const Maps = () => {
     setSearch(farmer.name);
     setIsDropdownOpen(false);
     setErrorMessage("");
-    if (mapRef) {
+    if (isMapReady && mapRef) {
       const markerLatLng = getMarkerPosition(farmer.coordinates);
-      mapRef.flyTo(markerLatLng, 16, { duration: 1.5 });
+      mapRef.flyTo(markerLatLng, 18, { duration: 1.5 });
       setGeocodedLocation(null);
+    } else {
+      setPendingSearch(farmer.name);
     }
+  };
+
+  const performSearch = async (searchTerm) => {
+    if (!isMapReady || !mapRef) return;
+
+    const lowerTerm = searchTerm.toLowerCase().trim();
+    const matchingFarmers = farmers.filter((f) =>
+      f.name.toLowerCase().includes(lowerTerm) ||
+      f.farmLocation.toLowerCase().includes(lowerTerm)
+    );
+
+    if (matchingFarmers.length > 0) {
+      const bestMatch = matchingFarmers[0];
+      const markerLatLng = getMarkerPosition(bestMatch.coordinates);
+      mapRef.flyTo(markerLatLng, 18, { duration: 1.5 });
+      setIsDropdownOpen(false);
+      setGeocodedLocation(null);
+      setErrorMessage("");
+    } else {
+      const geocodedResults = await geocodeAddress(lowerTerm);
+      if (geocodedResults.length > 0) {
+        if (geocodedResults.length === 1) {
+          setGeocodedLocation(geocodedResults[0]);
+          mapRef.flyTo([geocodedResults[0].lat, geocodedResults[0].lng], 16, { duration: 1.5 });
+        } else {
+          const bounds = L.latLngBounds(geocodedResults.map(loc => [loc.lat, loc.lng]));
+          mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
+          setGeocodedLocation(geocodedResults);
+        }
+        setIsDropdownOpen(false);
+        setErrorMessage("");
+      } else {
+        setErrorMessage(`No farmer or location found for "${searchTerm}". Showing all.`);
+        let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
+        if (userLocation) boundsArray.push(userLocation);
+        const bounds = L.latLngBounds(boundsArray);
+        mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
+        setGeocodedLocation(null);
+      }
+    }
+    setIsDropdownOpen(false);
   };
 
   // Handle search submission
   const handleSearchSubmit = async (event) => {
-    if (event.type === "click" || event.key === "Enter") {
-      if (!mapRef) {
-        setErrorMessage("Map is not ready yet. Please try again.");
+    if (event.type === "click" || (event.key === "Enter" && search.trim() !== "")) {
+      if (!isMapReady) {
+        setPendingSearch(search);
+        setErrorMessage("Map is loading... Search will apply shortly.");
         return;
       }
-      const searchTerm = search.toLowerCase();
-      const farm = farmers.find((f) =>
-        f.name.toLowerCase().includes(searchTerm) ||
-        f.farmLocation.toLowerCase().includes(searchTerm)
-      );
-
-      if (farm) {
-        const markerLatLng = getMarkerPosition(farm.coordinates);
-        mapRef.flyTo(markerLatLng, 16, { duration: 1.5 });
-        setIsDropdownOpen(false);
-        setGeocodedLocation(null);
-        setErrorMessage("");
-      } else {
-        const geocodedResults = await geocodeAddress(searchTerm);
-        if (geocodedResults.length > 0) {
-          if (geocodedResults.length === 1) {
-            setGeocodedLocation(geocodedResults[0]);
-            mapRef.flyTo([geocodedResults[0].lat, geocodedResults[0].lng], 16, { duration: 1.5 });
-          } else {
-            const bounds = L.latLngBounds(geocodedResults.map(loc => [loc.lat, loc.lng]));
-            mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-            setGeocodedLocation(geocodedResults);
-          }
-          setIsDropdownOpen(false);
-          setErrorMessage("");
-        } else {
-          setErrorMessage(`No results found for "${searchTerm}". Showing all farmers.`);
-          let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
-          if (userLocation) boundsArray.push(userLocation);
-          const bounds = L.latLngBounds(boundsArray);
-          mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-          setGeocodedLocation(null);
-          setIsDropdownOpen(false);
-        }
-      }
+      await performSearch(search);
     }
   };
 
   // Handle marker click for smooth zoom
   const handleMarkerClick = (position) => {
     if (mapRef) {
-      mapRef.flyTo(position, 16, { duration: 1.5 });
+      mapRef.flyTo(position, 18, { duration: 1.5 });
     }
   };
 
@@ -398,15 +413,17 @@ const Maps = () => {
               <FaSearch className="text-gray-500 mx-3" />
               <input
                 type="text"
-                placeholder="Search by farmer name or address..."
+                placeholder="Search by farmer name or address... (Press Enter to zoom)"
                 value={search}
                 onChange={handleSearch}
                 onKeyDown={handleSearchSubmit}
-                className="w-full bg-transparent focus:outline-none text-gray-700 placeholder-gray-400 text-sm font-sans"
+                disabled={!isMapReady}
+                className="w-full bg-transparent focus:outline-none text-gray-700 placeholder-gray-400 text-sm font-sans disabled:opacity-50"
               />
               <button
                 onClick={handleSearchSubmit}
-                className="ml-2 p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                disabled={!isMapReady}
+                className="ml-2 p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
               >
                 <FaSearch />
               </button>
@@ -430,10 +447,7 @@ const Maps = () => {
               </div>
             )}
           </div>
-          <div className="flex gap-4">
-          
-       
-          </div>
+          <div className="flex gap-4"></div>
         </header>
 
         {/* Map Container */}
@@ -442,7 +456,14 @@ const Maps = () => {
             center={defaultCenter}
             zoom={defaultZoom}
             style={{ height: "100%", width: "100%" }}
-            whenCreated={setMapRef}
+            whenCreated={(mapInstance) => {
+              setMapRef(mapInstance);
+              setIsMapReady(true);
+              if (pendingSearch) {
+                performSearch(pendingSearch);
+                setPendingSearch("");
+              }
+            }}
             zoomControl={false}
           >
             <TileLayer
@@ -477,7 +498,20 @@ const Maps = () => {
                 </LayerGroup>
               </LayersControl.Overlay>
               <LayersControl.Overlay checked name="Farmers">
-                <LayerGroup>
+                <MarkerClusterGroup
+                  showCoverageOnHover={false}
+                  spiderfyOnMaxZoom={true}
+                  zoomToBoundsOnClick={true}
+                  maxClusterRadius={50}
+                  iconCreateFunction={(cluster) => {
+                    const count = cluster.getChildCount();
+                    return L.divIcon({
+                      html: `<div style="background-color: rgba(51, 136, 255, 0.8); color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${count}</div>`,
+                      className: "custom-cluster-icon",
+                      iconSize: [40, 40],
+                    });
+                  }}
+                >
                   {farmers.map((farm) => {
                     const position = getMarkerPosition(farm.coordinates);
                     const iconColor = getIconColor(farm.vegetable);
@@ -508,7 +542,7 @@ const Maps = () => {
                       </Marker>
                     );
                   })}
-                </LayerGroup>
+                </MarkerClusterGroup>
               </LayersControl.Overlay>
               <LayersControl.Overlay checked name="My Location">
                 <LayerGroup>
@@ -605,7 +639,7 @@ const Maps = () => {
             {isInfoOpen && (
               <div className="mt-2 text-gray-700 animate-fade-in">
                 <p className="text-sm">
-                  This map shows real-time farmer locations in Canlaon City. Your location is automatically detected and shown on the map (blue marker). Click markers or the locate button for smooth animated zoom. Search by farmer name or address to auto-zoom to specific locations or explore all farmers and the DA Office. Switch to Draw Mode to draw rectangles, polygons, or markers for pinpointing areas with CRUD operations via the toolbar.
+                  This map shows real-time farmer locations in Canlaon City. Your location is automatically detected and shown on the map (blue marker). Click markers or the locate button for smooth animated zoom. Search by farmer name or address (press Enter to auto-zoom to the first match). Overlapping farmers are clustered—click to expand!
                 </p>
               </div>
             )}

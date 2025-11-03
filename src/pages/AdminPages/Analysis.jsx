@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
-  BarChart, Bar, PieChart, Pie, Cell
+  BarChart, Bar, PieChart, Pie, Cell, Brush
 } from "recharts";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -31,6 +31,27 @@ const center = [10.3903, 123.2224]; // Canlaon City coordinates
 
 const COLORS = ["#2E7D32", "#EF6C00", "#1976D2", "#D32F2F", "#689F38", "#E64A19"];
 
+// Custom Tooltip Component
+const CustomTooltip = ({ active, payload, label, formatter, labelFormatter }) => {
+  if (active && payload && payload.length) {
+    let header = labelFormatter(label);
+    if (payload[0].payload.barangay) {
+      header = `Season: ${label} - Barangay: ${payload[0].payload.barangay}`;
+    }
+    return (
+      <div className="bg-white p-4 rounded-lg shadow-lg border border-green-200">
+        <p className="text-green-800 font-semibold">{header}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-gray-700">
+            {entry.name}: {formatter(entry.value)}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const AgriDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,12 +64,15 @@ const AgriDashboard = () => {
   const [farmerCropTrends, setFarmerCropTrends] = useState([]);
   const [farmersData, setFarmersData] = useState([]);
   const [currentFarmerIndex, setCurrentFarmerIndex] = useState(0);
-
-  // New analytics
   const [totalProduction, setTotalProduction] = useState(0);
   const [averageFarmSize, setAverageFarmSize] = useState(0);
   const [seasonDistribution, setSeasonDistribution] = useState([]);
   const [topProducingFarmers, setTopProducingFarmers] = useState([]);
+  const [landOwnershipDistribution, setLandOwnershipDistribution] = useState([]);
+  const [farmTypeDistribution, setFarmTypeDistribution] = useState([]);
+  const [topBarangayPerSeason, setTopBarangayPerSeason] = useState([]);
+  const [visibleSeries, setVisibleSeries] = useState({}); // State for toggling series visibility
+  const [distributionType, setDistributionType] = useState('farmType');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -65,6 +89,8 @@ const AgriDashboard = () => {
           name: doc.data().fullName || `${doc.data().firstName || ''} ${doc.data().lastName || ''}`,
           vegetable: doc.data().mainCrops?.crop1?.name || "N/A",
           coordinates: doc.data().coordinates || [10.3903, 123.2224],
+          landOwnership: doc.data().landOwnership || "Unknown",
+          farmType: doc.data().farmType || "Unknown",
         }));
         setFarmersData(farmers);
         setTotalFarmers(farmersSnapshot.size);
@@ -137,6 +163,43 @@ const AgriDashboard = () => {
         const seasonData = Object.entries(seasonDist).map(([season, count]) => ({ season, count }));
         setSeasonDistribution(seasonData);
 
+        const landOwnershipDist = farmers.reduce((acc, farmer) => {
+          const ownership = farmer.landOwnership || "Unknown";
+          acc[ownership] = (acc[ownership] || 0) + 1;
+          return acc;
+        }, {});
+        const landOwnershipData = Object.entries(landOwnershipDist).map(([ownership, count]) => ({ ownership, count }));
+        setLandOwnershipDistribution(landOwnershipData);
+
+        const farmTypeDist = farmers.reduce((acc, farmer) => {
+          const type = farmer.farmType || "Unknown";
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {});
+        const farmTypeData = Object.entries(farmTypeDist).map(([type, count]) => ({ type, count }));
+        setFarmTypeDistribution(farmTypeData);
+
+        const seasonBarangayProd = farmers.reduce((acc, farmer) => {
+          const season = farmer.season || "Unknown";
+          const barangay = farmer.farmBarangay || "Unknown";
+          const prod = Number(farmer.hectares) || 0;
+          if (!acc[season]) acc[season] = {};
+          acc[season][barangay] = (acc[season][barangay] || 0) + prod;
+          return acc;
+        }, {});
+        const topPerSeason = Object.entries(seasonBarangayProd).map(([season, barangs]) => {
+          let maxProd = 0;
+          let topBar = "None";
+          Object.entries(barangs).forEach(([bar, prod]) => {
+            if (prod > maxProd) {
+              maxProd = prod;
+              topBar = bar;
+            }
+          });
+          return { season, barangay: topBar, production: maxProd };
+        });
+        setTopBarangayPerSeason(topPerSeason);
+
         const topFarmers = farmers
           .map(farmer => ({
             name: farmer.name,
@@ -145,6 +208,16 @@ const AgriDashboard = () => {
           .sort((a, b) => b.production - a.production)
           .slice(0, 5);
         setTopProducingFarmers(topFarmers);
+
+        // Initialize visible series for charts
+        setVisibleSeries({
+          farmerCropTrends: cropTrendsData.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
+          highDemandVeggies: demandData.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
+          seasonDistribution: seasonData.reduce((acc, item) => ({ ...acc, [item.season]: true }), {}),
+          landOwnershipDistribution: landOwnershipData.reduce((acc, item) => ({ ...acc, [item.ownership]: true }), {}),
+          farmTypeDistribution: farmTypeData.reduce((acc, item) => ({ ...acc, [item.type]: true }), {}),
+          topProducingFarmers: topFarmers.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
+        });
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -156,6 +229,36 @@ const AgriDashboard = () => {
 
     fetchDashboardData();
   }, []);
+
+  const handleLegendClick = (chartKey, dataKey) => {
+    setVisibleSeries(prev => ({
+      ...prev,
+      [chartKey]: {
+        ...prev[chartKey],
+        [dataKey]: !prev[chartKey][dataKey],
+      },
+    }));
+  };
+
+  const handleBarClick = (data, chartKey) => {
+    let message = `Selected ${chartKey}: `;
+    if (chartKey === "Crop") {
+      message += `${data.name} with value ${data.count}`;
+    } else if (chartKey === "Farmer") {
+      message += `${data.name} with ${data.production} ha`;
+    } else if (chartKey === "Top Barangay per Season") {
+      message += `Season ${data.season}, Barangay ${data.barangay} with ${data.production} ha`;
+    } else {
+      message += `${data.name} with value ${data.count || data.production}`;
+    }
+    alert(message);
+    // Add filtering logic here if needed
+  };
+
+  const handlePieClick = (data, chartKey) => {
+    alert(`Selected ${chartKey}: ${data.season || data.ownership || data.type} with ${data.count} farmers`);
+    // Add filtering logic here if needed
+  };
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -247,13 +350,34 @@ const AgriDashboard = () => {
                 <p className="text-sm text-gray-500 mb-6">Number of farmers producing each vegetable</p>
                 {farmerCropTrends.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={farmerCropTrends}>
+                    <BarChart 
+                      data={farmerCropTrends.filter(item => visibleSeries.farmerCropTrends[item.name])}
+                      onClick={(data) => data && handleBarClick(data.activePayload[0].payload, "Crop")}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" opacity={0.5} />
                       <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} tick={{ fontSize: 14, fill: "#374151" }} />
                       <YAxis tick={{ fontSize: 14, fill: "#374151" }} label={{ value: "Number of Farmers", angle: -90, position: "insideLeft", offset: -5, fill: "#374151" }} />
-                      <Tooltip formatter={(value) => [`${value} farmers`, "Count"]} labelFormatter={(label) => `Vegetable: ${label}`} />
-                      <Legend verticalAlign="top" height={36} />
-                      <Bar dataKey="count" fill="#10b981" />
+                      <Tooltip 
+                        content={<CustomTooltip 
+                          formatter={(value) => [`${value} farmers`, "Count"]} 
+                          labelFormatter={(label) => `Vegetable: ${label}`} 
+                        />}
+                      />
+                      <Legend 
+                        onClick={(e) => handleLegendClick("farmerCropTrends", e.dataKey)} 
+                        formatter={(value) => <span className={visibleSeries.farmerCropTrends[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                      />
+                      <Bar 
+                        dataKey="count" 
+                        fill="#10b981" 
+                        onClick={(data) => handleBarClick(data, "Crop")} 
+                        radius={[4, 4, 0, 0]}
+                        animationDuration={800}
+                      >
+                        {farmerCropTrends.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -267,14 +391,33 @@ const AgriDashboard = () => {
                 </h2>
                 <p className="text-sm text-gray-500 mb-6">Most produced vegetables based on farmer data</p>
                 {highDemandVeggies.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={highDemandVeggies}>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <LineChart 
+                      data={highDemandVeggies.filter(item => visibleSeries.highDemandVeggies[item.name])}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" opacity={0.5} />
                       <XAxis dataKey="name" angle={0} textAnchor="middle" height={50} tick={{ fontSize: 14, fill: "#374151" }} padding={{ left: 20, right: 20 }} />
                       <YAxis tick={{ fontSize: 14, fill: "#374151" }} label={{ value: "Quantity (ha)", angle: -90, position: "insideLeft", offset: -5, fill: "#374151" }} />
-                      <Tooltip formatter={(value) => [`${value} ha`, "Quantity"]} labelFormatter={(label) => `Vegetable: ${label}`} />
-                      <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", r: 6 }} activeDot={{ r: 8 }} />
-                      <Legend verticalAlign="top" height={36} />
+                      <Tooltip 
+                        content={<CustomTooltip 
+                          formatter={(value) => [`${value} ha`, "Quantity"]} 
+                          labelFormatter={(label) => `Vegetable: ${label}`} 
+                        />}
+                      />
+                      <Legend 
+                        onClick={(e) => handleLegendClick("highDemandVeggies", e.dataKey)} 
+                        formatter={(value) => <span className={visibleSeries.highDemandVeggies[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="value" 
+                        stroke="#10b981" 
+                        strokeWidth={3} 
+                        dot={{ fill: "#10b981", r: 6 }} 
+                        activeDot={{ r: 8 }} 
+                        animationDuration={800}
+                      />
+                      <Brush dataKey="name" height={30} stroke="#10b981" />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -291,20 +434,34 @@ const AgriDashboard = () => {
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
-                        data={seasonDistribution}
+                        data={seasonDistribution.filter(item => visibleSeries.seasonDistribution[item.season])}
                         dataKey="count"
                         nameKey="season"
                         cx="50%"
                         cy="50%"
                         outerRadius={100}
                         label
+                        onClick={(data) => handlePieClick(data, "Season")}
+                        animationDuration={800}
                       >
                         {seasonDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={COLORS[index % COLORS.length]} 
+                            style={{ cursor: "pointer", opacity: visibleSeries.seasonDistribution[entry.season] ? 1 : 0.3 }}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip />
-                      <Legend />
+                      <Tooltip 
+                        content={<CustomTooltip 
+                          formatter={(value) => [`${value} farmers`, "Count"]} 
+                          labelFormatter={(label) => `Season: ${label}`} 
+                        />}
+                      />
+                      <Legend 
+                        onClick={(e) => handleLegendClick("seasonDistribution", e.dataKey)} 
+                        formatter={(value) => <span className={visibleSeries.seasonDistribution[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -319,19 +476,42 @@ const AgriDashboard = () => {
                 <p className="text-sm text-gray-500 mb-6">Farmers ranked by production area</p>
                 {topProducingFarmers.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topProducingFarmers}>
+                    <BarChart 
+                      data={topProducingFarmers.filter(item => visibleSeries.topProducingFarmers[item.name])}
+                      onClick={(data) => data && handleBarClick(data.activePayload[0].payload, "Farmer")}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" opacity={0.5} />
                       <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} tick={{ fontSize: 14, fill: "#374151" }} />
                       <YAxis tick={{ fontSize: 14, fill: "#374151" }} label={{ value: "Production (ha)", angle: -90, position: "insideLeft", offset: -5, fill: "#374151" }} />
-                      <Tooltip formatter={(value) => [`${value} ha`, "Production"]} labelFormatter={(label) => `Farmer: ${label}`} />
-                      <Legend verticalAlign="top" height={36} />
-                      <Bar dataKey="production" fill="#10b981" />
+                      <Tooltip 
+                        content={<CustomTooltip 
+                          formatter={(value) => [`${value} ha`, "Production"]} 
+                          labelFormatter={(label) => `Farmer: ${label}`} 
+                        />}
+                      />
+                      <Legend 
+                        onClick={(e) => handleLegendClick("topProducingFarmers", e.dataKey)} 
+                        formatter={(value) => <span className={visibleSeries.topProducingFarmers[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                      />
+                      <Bar 
+                        dataKey="production" 
+                        fill="#10b981" 
+                        onClick={(data) => handleBarClick(data, "Farmer")} 
+                        radius={[4, 4, 0, 0]}
+                        animationDuration={800}
+                      >
+                        {topProducingFarmers.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
                   <p className="text-gray-500 text-center py-10">No production data available yet</p>
                 )}
               </div>
+
+            
             </div>
 
             <div className="space-y-4">
@@ -359,10 +539,10 @@ const AgriDashboard = () => {
                               <div className="p-2">
                                 <h3 className="font-semibold text-green-800">{farm.name}</h3>
                                 <p className="text-sm text-gray-600">Barangay: {farm.farmBarangay || "Unknown"}</p>
-                                <p className="text-sm text-gray-600">
-                                  Production: {farm.hectares || 0} ha
-                                </p>
+                                <p className="text-sm text-gray-600">Production: {farm.hectares || 0} ha</p>
                                 <p className="text-sm text-gray-600">Crop: {farm.vegetable}</p>
+                                <p className="text-sm text-gray-600">Land Ownership: {farm.landOwnership}</p>
+                                <p className="text-sm text-gray-600">Farm Type: {farm.farmType}</p>
                               </div>
                             </Popup>
                           </Marker>
@@ -376,6 +556,148 @@ const AgriDashboard = () => {
                   <button className="text-gray-500 hover:text-gray-700 text-sm">View Details</button>
                 </div>
               </DashboardCard>
+
+
+                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <h2 className="text-2xl font-bold text-green-900 mb-2 flex items-center">
+                  <FaChartBar className="mr-2 text-green-600" /> Top Producing Barangay per Season
+                </h2>
+                <p className="text-sm text-gray-500 mb-6">Barangay with highest production for each season</p>
+                {topBarangayPerSeason.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart 
+                      data={topBarangayPerSeason}
+                      onClick={(data) => data && handleBarClick(data.activePayload[0].payload, "Top Barangay per Season")}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" opacity={0.5} />
+                      <XAxis dataKey="season" angle={-45} textAnchor="end" height={70} tick={{ fontSize: 14, fill: "#374151" }} />
+                      <YAxis tick={{ fontSize: 14, fill: "#374151" }} label={{ value: "Production (ha)", angle: -90, position: "insideLeft", offset: -5, fill: "#374151" }} />
+                      <Tooltip 
+                        content={<CustomTooltip 
+                          formatter={(value) => [`${value} ha`, "Production"]} 
+                          labelFormatter={(label) => `Season: ${label}`} 
+                        />}
+                      />
+                      <Bar 
+                        dataKey="production" 
+                        fill="#10b981" 
+                        radius={[4, 4, 0, 0]}
+                        animationDuration={800}
+                      >
+                        {topBarangayPerSeason.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-gray-500 text-center py-10">No season production data available yet</p>
+                )}
+              </div>
+
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <h2 className="text-2xl font-bold text-green-900 mb-2 flex items-center">
+                  <FaChartPie className="mr-2 text-green-600" /> Farmer Distributions
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">Distribution of farmers by type or ownership</p>
+                <div className="flex justify-center space-x-4 mb-4">
+                  <button 
+                    onClick={() => setDistributionType('farmType')}
+                    className={`px-4 py-2 rounded ${distributionType === 'farmType' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                  >
+                    Farm Type
+                  </button>
+                  <button 
+                    onClick={() => setDistributionType('landOwnership')}
+                    className={`px-4 py-2 rounded ${distributionType === 'landOwnership' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                  >
+                    Land Ownership
+                  </button>
+                </div>
+                {distributionType === 'farmType' ? (
+                  <>
+                    <p className="text-sm text-gray-500 mb-6">Number of farmers by farm type</p>
+                    {farmTypeDistribution.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={farmTypeDistribution.filter(item => visibleSeries.farmTypeDistribution[item.type])}
+                            dataKey="count"
+                            nameKey="type"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            label
+                            onClick={(data) => handlePieClick(data, "Farm Type")}
+                            animationDuration={800}
+                          >
+                            {farmTypeDistribution.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={COLORS[index % COLORS.length]} 
+                                style={{ cursor: "pointer", opacity: visibleSeries.farmTypeDistribution[entry.type] ? 1 : 0.3 }}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            content={<CustomTooltip 
+                              formatter={(value) => [`${value} farmers`, "Count"]} 
+                              labelFormatter={(label) => `Farm Type: ${label}`} 
+                            />}
+                          />
+                          <Legend 
+                            onClick={(e) => handleLegendClick("farmTypeDistribution", e.dataKey)} 
+                            formatter={(value) => <span className={visibleSeries.farmTypeDistribution[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-center py-10">No farm type data available yet</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-500 mb-6">Number of farmers by land ownership</p>
+                    {landOwnershipDistribution.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={landOwnershipDistribution.filter(item => visibleSeries.landOwnershipDistribution[item.ownership])}
+                            dataKey="count"
+                            nameKey="ownership"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            label
+                            onClick={(data) => handlePieClick(data, "Land Ownership")}
+                            animationDuration={800}
+                          >
+                            {landOwnershipDistribution.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={COLORS[index % COLORS.length]} 
+                                style={{ cursor: "pointer", opacity: visibleSeries.landOwnershipDistribution[entry.ownership] ? 1 : 0.3 }}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            content={<CustomTooltip 
+                              formatter={(value) => [`${value} farmers`, "Count"]} 
+                              labelFormatter={(label) => `Ownership: ${label}`} 
+                            />}
+                          />
+                          <Legend 
+                            onClick={(e) => handleLegendClick("landOwnershipDistribution", e.dataKey)} 
+                            formatter={(value) => <span className={visibleSeries.landOwnershipDistribution[value] ? "text-gray-800" : "text-gray-400"}>{value}</span>}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-center py-10">No land ownership data available yet</p>
+                    )}
+                  </>
+                )}
+              </div>
 
               <DashboardCard title="Farmer Profile">
                 {farmersData.length > 0 ? (
@@ -409,6 +731,8 @@ const AgriDashboard = () => {
                       <p><strong>Sitio:</strong> {currentFarmer.farmSitio || "N/A"}</p>
                       <p><strong>Hectares:</strong> {currentFarmer.hectares || 0} ha</p>
                       <p><strong>Main Crop:</strong> {currentFarmer.vegetable}</p>
+                      <p><strong>Land Ownership:</strong> {currentFarmer.landOwnership || "N/A"}</p>
+                      <p><strong>Farm Type:</strong> {currentFarmer.farmType || "N/A"}</p>
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
                       Farmer {currentFarmerIndex + 1} of {farmersData.length}
@@ -429,6 +753,9 @@ const AgriDashboard = () => {
                   </p>
                   <p>
                     Farmer production trends show {farmerCropTrends.length > 0 ? farmerCropTrends[0].name : "no data yet"} as the most cultivated crop, with <strong>{farmerCropTrends.length > 0 ? farmerCropTrends[0].count : 0}</strong> farmers involved. The "Production Map" visualizes farm locations, with significant activity in barangays like {productionByBarangay.length > 0 ? productionByBarangay[0].name : "Unknown"}.
+                  </p>
+                  <p>
+                    Land ownership data indicates that {landOwnershipDistribution.length > 0 ? landOwnershipDistribution[0].ownership : "no data"} is the most common type, with {landOwnershipDistribution.length > 0 ? landOwnershipDistribution[0].count : 0} farmers. Farm type distribution shows {farmTypeDistribution.length > 0 ? farmTypeDistribution[0].type : "no data"} as the predominant type, with {farmTypeDistribution.length > 0 ? farmTypeDistribution[0].count : 0} farmers.
                   </p>
                   <p>
                     Recent activities indicate ongoing engagement, with the latest being {recentActivities.length > 0 ? recentActivities[0].name : "none recorded"} at {recentActivities.length > 0 ? new Date(recentActivities[0].timestamp).toLocaleString() : "N/A"}. This data suggests a dynamic agricultural economy with opportunities for targeted growth in high-demand crops.
