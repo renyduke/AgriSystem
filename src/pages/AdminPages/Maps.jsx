@@ -10,116 +10,12 @@ import L from "leaflet";
 import "leaflet.motion/dist/leaflet.motion.js";
 import { db } from "../../config/firebaseConfig";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
-import { FaSearch, FaMapMarkerAlt, FaInfoCircle, FaUser, FaLocationArrow } from "react-icons/fa";
+import { FaSearch, FaMapMarkerAlt, FaInfoCircle } from "react-icons/fa";
 import axios from "axios";
 import { Link } from "react-router-dom";
 
 // DA Office coordinates
 const daOffice = { lat: 10.378622, lng: 123.230062 };
-
-// Component to handle locating and marking user position
-const LocateUserControl = ({ userLocation, setUserLocation, errorMessage, setErrorMessage }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!map) return;
-
-    const locateUser = () => {
-      setErrorMessage("");
-      map.locate({ setView: false, maxZoom: 16, timeout: 10000, enableHighAccuracy: true });
-    };
-
-    // Create custom control button for Locate Me
-    const LocateControl = L.Control.extend({
-      options: { position: "topright" },
-      onAdd: function () {
-        const container = L.DomUtil.create("div", "leaflet-bar leaflet-control leaflet-control-custom");
-        container.style.backgroundColor = "white";
-        container.style.borderRadius = "4px";
-        container.style.boxShadow = "0 1px 5px rgba(0,0,0,0.65)";
-        container.style.width = "34px";
-        container.style.height = "34px";
-        container.style.cursor = "pointer";
-        container.style.marginTop = "10px";
-        container.style.display = "flex";
-        container.style.alignItems = "center";
-        container.style.justifyContent = "center";
-        container.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
-        container.title = "Locate Me";
-        container.onclick = function (e) {
-          L.DomEvent.stopPropagation(e);
-          locateUser();
-        };
-        return container;
-      },
-    });
-
-    // Create custom control button for Print
-    const PrintControl = L.Control.extend({
-      options: { position: "topright" },
-      onAdd: function () {
-        const container = L.DomUtil.create("div", "leaflet-bar leaflet-control leaflet-control-custom");
-        container.style.backgroundColor = "white";
-        container.style.borderRadius = "4px";
-        container.style.boxShadow = "0 1px 5px rgba(0,0,0,0.65)";
-        container.style.width = "34px";
-        container.style.height = "34px";
-        container.style.cursor = "pointer";
-        container.style.marginTop = "54px";
-        container.style.display = "flex";
-        container.style.alignItems = "center";
-        container.style.justifyContent = "center";
-        container.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>';
-        container.title = "Print Map";
-        container.onclick = function (e) {
-          L.DomEvent.stopPropagation(e);
-          window.print();
-        };
-        return container;
-      },
-    });
-
-    const locateControl = new LocateControl();
-    map.addControl(locateControl);
-    const printControl = new PrintControl();
-    map.addControl(printControl);
-
-    const onLocationFound = (e) => {
-      const { lat, lng } = e.latlng;
-      setUserLocation({ lat, lng });
-      map.flyTo(e.latlng, 16, { duration: 1.5 });
-    };
-
-    const onLocationError = (e) => {
-      setErrorMessage(`Location access denied or error: ${e.message}. Falling back to default view.`);
-      console.error(e);
-    };
-
-    map.on("locationfound", onLocationFound);
-    map.on("locationerror", onLocationError);
-
-    locateUser();
-
-    return () => {
-      map.off("locationfound", onLocationFound);
-      map.off("locationerror", onLocationError);
-      map.removeControl(locateControl);
-      map.removeControl(printControl);
-    };
-  }, [map, setUserLocation, setErrorMessage]);
-
-  return null;
-};
-
-// Custom blue circle icon for user location
-const createUserIcon = () => {
-  return L.divIcon({
-    className: "custom-user-marker",
-    html: `<div style="background-color: #3388ff; border: 2px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-};
 
 const Maps = () => {
   const [search, setSearch] = useState("");
@@ -131,7 +27,6 @@ const Maps = () => {
   const [cursorCoords, setCursorCoords] = useState({ lat: null, lng: null });
   const [geocodedLocation, setGeocodedLocation] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [userLocation, setUserLocation] = useState(null);
   const [mapMode, setMapMode] = useState("view");
   const [isMapReady, setIsMapReady] = useState(false);
   const [pendingSearch, setPendingSearch] = useState("");
@@ -139,24 +34,6 @@ const Maps = () => {
   const drawnItems = useRef(null);
   const defaultCenter = [10.3860, 123.2220];
   const defaultZoom = 14;
-
-  // Add print media query styles
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.innerHTML = `
-      @media print {
-        body > *:not(.leaflet-container) {
-          display: none !important;
-        }
-        .leaflet-container {
-          height: 100vh !important;
-          width: 100vw !important;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
 
   // Icon helpers
   const createPinIcon = (color) => {
@@ -179,7 +56,7 @@ const Maps = () => {
     }
   };
 
-  // Fetch farmers data from Firestore with enriched mainCrops from vegetables collection
+  // Fetch farmers data from Firestore...
   useEffect(() => {
     const unsubscribeFarmers = onSnapshot(collection(db, "farmers"), async (snapshot) => {
       const farmersData = snapshot.docs.map((doc) => ({
@@ -227,17 +104,14 @@ const Maps = () => {
     return () => unsubscribeFarmers();
   }, []);
 
-  // Auto-zoom to fit all markers on load or update
+  // Auto-zoom to fit all markers (without user location)
   useEffect(() => {
     if (isMapReady && mapRef && farmers.length > 0) {
       let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
-      if (userLocation) {
-        boundsArray.push(userLocation);
-      }
       const bounds = L.latLngBounds(boundsArray);
       mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
     }
-  }, [isMapReady, mapRef, farmers, userLocation]);
+  }, [isMapReady, mapRef, farmers]); // Removed userLocation dependency
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -250,7 +124,7 @@ const Maps = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Update cursor coordinates on map interaction
+  // Update cursor coordinates
   useEffect(() => {
     if (mapRef) {
       const updateCoords = (e) => {
@@ -318,7 +192,6 @@ const Maps = () => {
 
     if (searchTerm === "" && mapRef) {
       let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
-      if (userLocation) boundsArray.push(userLocation);
       const bounds = L.latLngBounds(boundsArray);
       mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
       setGeocodedLocation(null);
@@ -371,7 +244,6 @@ const Maps = () => {
       } else {
         setErrorMessage(`No farmer or location found for "${searchTerm}". Showing all.`);
         let boundsArray = [daOffice, ...farmers.map(f => f.coordinates)];
-        if (userLocation) boundsArray.push(userLocation);
         const bounds = L.latLngBounds(boundsArray);
         mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
         setGeocodedLocation(null);
@@ -408,46 +280,6 @@ const Maps = () => {
             <FaMapMarkerAlt className="mr-3 text-green-600" />
             Farm Map Explorer
           </h2>
-          <div className="relative w-full md:w-1/3" ref={searchRef}>
-            <div className="flex items-center bg-white rounded-full shadow-md p-2">
-              <FaSearch className="text-gray-500 mx-3" />
-              <input
-                type="text"
-                placeholder="Search by farmer name or address... (Press Enter to zoom)"
-                value={search}
-                onChange={handleSearch}
-                onKeyDown={handleSearchSubmit}
-                disabled={!isMapReady}
-                className="w-full bg-transparent focus:outline-none text-gray-700 placeholder-gray-400 text-sm font-sans disabled:opacity-50"
-              />
-              <button
-                onClick={handleSearchSubmit}
-                disabled={!isMapReady}
-                className="ml-2 p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                <FaSearch />
-              </button>
-            </div>
-            {isDropdownOpen && suggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                {suggestions.map((farmer) => (
-                  <li
-                    key={farmer.id}
-                    onClick={() => handleSuggestionClick(farmer)}
-                    className="px-4 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer transition-colors"
-                  >
-                    {farmer.name} - {farmer.farmLocation}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {errorMessage && (
-              <div className="absolute z-50 w-full mt-1 bg-red-100 border border-red-200 rounded-lg p-2 text-sm text-red-800">
-                {errorMessage}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-4"></div>
         </header>
 
         {/* Map Container */}
@@ -471,7 +303,7 @@ const Maps = () => {
               attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
             />
             <ZoomControl position="topright" />
-            <LocateUserControl userLocation={userLocation} setUserLocation={setUserLocation} errorMessage={errorMessage} setErrorMessage={setErrorMessage} />
+            {/* LocateUserControl removed here */}
 
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="OpenStreetMap">
@@ -534,7 +366,6 @@ const Maps = () => {
                               to={`/farmer/${farm.id}`}
                               className="mt-2 inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
                             >
-                              <FaUser className="mr-2" />
                               View Profile
                             </Link>
                           </div>
@@ -544,26 +375,7 @@ const Maps = () => {
                   })}
                 </MarkerClusterGroup>
               </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="My Location">
-                <LayerGroup>
-                  {userLocation && (
-                    <Marker 
-                      position={[userLocation.lat, userLocation.lng]} 
-                      icon={createUserIcon()}
-                      eventHandlers={{
-                        click: () => handleMarkerClick([userLocation.lat, userLocation.lng])
-                      }}
-                    >
-                      <Popup>
-                        <div className="p-2">
-                          <h3 className="font-semibold text-blue-800">You are here</h3>
-                          <p className="text-sm text-gray-600">Lat: {userLocation.lat.toFixed(4)}, Lng: {userLocation.lng.toFixed(4)}</p>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  )}
-                </LayerGroup>
-              </LayersControl.Overlay>
+              {/* "My Location" layer removed here */}
             </LayersControl>
 
             <FeatureGroup ref={drawnItems}>
@@ -613,37 +425,25 @@ const Maps = () => {
           </MapContainer>
         </div>
 
-        {/* Coordinate Display and Info */}
-        <div className="flex flex-col md:flex-row justify-between gap-4">
-          {cursorCoords.lat && cursorCoords.lng && (
-            <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4 text-sm text-gray-800 flex-1">
-              <p><strong>Cursor Lat:</strong> {cursorCoords.lat}, <strong>Lng:</strong> {cursorCoords.lng}</p>
+        {/* Only Map Insights at the bottom */}
+        <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4">
+          <button
+            onClick={() => setIsInfoOpen((prev) => !prev)}
+            className="w-full flex items-center justify-between text-lg font-semibold text-green-800 hover:text-green-700 transition-colors"
+          >
+            <span className="flex items-center">
+              <FaInfoCircle className="mr-2 text-green-600" />
+              Map Insights
+            </span>
+            <span>{isInfoOpen ? "▲" : "▼"}</span>
+          </button>
+          {isInfoOpen && (
+            <div className="mt-2 text-gray-700 animate-fade-in">
+              <p className="text-sm">
+                This map shows real-time farmer locations in Canlaon City. Click markers for smooth animated zoom. Search by farmer name or address (press Enter to auto-zoom to the first match). Overlapping farmers are clustered—click to expand!
+              </p>
             </div>
           )}
-          {userLocation && (
-            <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4 text-sm text-gray-800 flex-1">
-              <p className="flex items-center"><FaLocationArrow className="mr-2 text-blue-600" /><strong>Your Location:</strong> Lat: {userLocation.lat.toFixed(4)}, Lng: {userLocation.lng.toFixed(4)}</p>
-            </div>
-          )}
-          <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4 flex-1">
-            <button
-              onClick={() => setIsInfoOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between text-lg font-semibold text-green-800 hover:text-green-700 transition-colors"
-            >
-              <span className="flex items-center">
-                <FaInfoCircle className="mr-2 text-green-600" />
-                Map Insights
-              </span>
-              <span>{isInfoOpen ? "▲" : "▼"}</span>
-            </button>
-            {isInfoOpen && (
-              <div className="mt-2 text-gray-700 animate-fade-in">
-                <p className="text-sm">
-                  This map shows real-time farmer locations in Canlaon City. Your location is automatically detected and shown on the map (blue marker). Click markers or the locate button for smooth animated zoom. Search by farmer name or address (press Enter to auto-zoom to the first match). Overlapping farmers are clustered—click to expand!
-                </p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

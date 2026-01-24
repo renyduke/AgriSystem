@@ -2,35 +2,28 @@ import React, { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, LayersControl, LayerGroup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import "leaflet.motion/dist/leaflet.motion.js";
-import { db } from "../../config/firebaseConfig";
-import { collection, onSnapshot } from "firebase/firestore";
-import { FaMapMarkerAlt, FaChartPie, FaLeaf, FaArrowRight, FaSearch, FaInfoCircle, FaUser, FaSpinner, FaChartBar, FaUsers, FaMap } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom";
-import { Tooltip } from "react-tooltip";
-import axios from "axios";
+import { FaMapMarkerAlt, FaChartPie, FaLeaf, FaArrowRight, FaSearch, FaUsers, FaMap, FaTractor, FaSeedling, FaChartLine } from "react-icons/fa";
 
-// DA Office coordinates
+// Mock data for demo
+const mockFarmers = [
+  { id: 1, name: "Juan Dela Cruz", vegetable: "Tomato", coordinates: [10.3860, 123.2220], hectares: 2.5, season: "Dry", farmLocation: "Barangay Pula" },
+  { id: 2, name: "Maria Santos", vegetable: "Corn", coordinates: [10.3900, 123.2250], hectares: 3.2, season: "Wet", farmLocation: "Barangay Mabigo" },
+  { id: 3, name: "Pedro Reyes", vegetable: "Rice", coordinates: [10.3820, 123.2180], hectares: 1.8, season: "Dry", farmLocation: "Barangay Linothangan" },
+];
+
 const daOffice = { lat: 10.378622, lng: 123.230062 };
 
 const Home = () => {
   const [search, setSearch] = useState("");
-  const [farmers, setFarmers] = useState([]);
+  const [farmers, setFarmers] = useState(mockFarmers);
   const [mapRef, setMapRef] = useState(null);
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [cursorCoords, setCursorCoords] = useState({ lat: null, lng: null });
-  const [geocodedLocation, setGeocodedLocation] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [stats, setStats] = useState({ totalFarmers: 0, totalHectares: 0, activeSeasons: 0 });
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ totalFarmers: 3, totalHectares: 7.5, activeSeasons: 2 });
   const searchRef = useRef(null);
   const defaultCenter = [10.3860, 123.2220];
   const defaultZoom = 14;
-  const navigate = useNavigate();
 
-  // Icon helpers
   const createPinIcon = (color) => {
     return L.icon({
       iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
@@ -51,64 +44,6 @@ const Home = () => {
     }
   };
 
-  // Fetch farmers data from Firestore
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "farmers"), (snapshot) => {
-      if (snapshot.empty) {
-        setErrorMessage("No farmer data available in the database.");
-        setLoading(false);
-        return;
-      }
-      const farmersData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        const name = data.fullName || `${data.firstName || ""} ${data.lastName || ""}`.trim();
-        let vegetable = "N/A";
-        if (data.mainCrops) {
-          const cropKeys = Object.keys(data.mainCrops);
-          if (cropKeys.length > 0) {
-            vegetable = data.mainCrops[cropKeys[0]].name || "N/A";
-          }
-        }
-        let coordinates = data.coordinates;
-        if (!Array.isArray(coordinates) || coordinates.length < 2 || !coordinates.every(Number.isFinite)) {
-          coordinates = data.area && Array.isArray(data.area) && data.area.length >= 2
-            ? [data.area[0], data.area[1]]
-            : defaultCenter;
-        }
-        return {
-          id: doc.id,
-          name,
-          vegetable,
-          coordinates,
-          hectares: data.hectares || 0,
-          season: data.season || "Default",
-          farmLocation: data.farmLocation || "N/A",
-        };
-      });
-      setFarmers(farmersData);
-      setStats({
-        totalFarmers: farmersData.length,
-        totalHectares: farmersData.reduce((sum, farmer) => sum + (farmer.hectares || 0), 0),
-        activeSeasons: [...new Set(farmersData.map((f) => f.season))].length,
-      });
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching farmers:", error);
-      setErrorMessage("Failed to load farmers data: " + error.message);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Auto-zoom to fit all markers on load
-  useEffect(() => {
-    if (mapRef && farmers.length > 0 && !loading) {
-      const bounds = L.latLngBounds([daOffice, ...farmers.map(f => f.coordinates)]);
-      mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-    }
-  }, [mapRef, farmers, loading]);
-
-  // Handle search input and suggestions
   useEffect(() => {
     if (search) {
       const filteredSuggestions = farmers.filter(
@@ -124,7 +59,6 @@ const Home = () => {
     }
   }, [search, farmers]);
 
-  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
@@ -135,77 +69,16 @@ const Home = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Update cursor coordinates on map interaction
-  useEffect(() => {
-    if (mapRef) {
-      const updateCoords = (e) => {
-        setCursorCoords({
-          lat: e.latlng.lat.toFixed(4),
-          lng: e.latlng.lng.toFixed(4),
-        });
-      };
-      mapRef.on("mousemove", updateCoords);
-      mapRef.on("click", updateCoords);
-      return () => {
-        mapRef.off("mousemove", updateCoords);
-        mapRef.off("click", updateCoords);
-      };
-    }
-  }, [mapRef]);
-
-  const getMarkerPosition = (coords) => {
-    if (Array.isArray(coords) && coords.length === 2 && coords.every(Number.isFinite)) {
-      return coords;
-    }
-    return defaultCenter;
-  };
-
-  // Geocode address using Nominatim
-  const geocodeAddress = async (query) => {
-    try {
-      const response = await axios.get("https://nominatim.openstreetmap.org/search", {
-        params: {
-          q: `${query}, Canlaon City, Philippines`,
-          format: "jsonv2",
-          limit: 5,
-          addressdetails: 1,
-          countrycodes: "ph",
-          email: "renbuenafuerte@gmail.com",
-        },
-      });
-      if (response.data && response.data.length > 0) {
-        return response.data.map((result) => ({
-          lat: parseFloat(result.lat),
-          lng: parseFloat(result.lon),
-          display_name: result.display_name,
-        }));
-      }
-      return [];
-    } catch (error) {
-      console.error("Geocoding error:", error);
-      return [];
-    }
-  };
-
-  // Handle suggestion click
   const handleSuggestionClick = (farmer) => {
     setSearch(farmer.name);
     setIsDropdownOpen(false);
-    setErrorMessage("");
     if (mapRef) {
-      const markerLatLng = getMarkerPosition(farmer.coordinates);
-      mapRef.flyTo(markerLatLng, 16, { duration: 1.5 });
-      setGeocodedLocation(null);
+      mapRef.flyTo(farmer.coordinates, 16, { duration: 1.5 });
     }
   };
 
-  // Handle search submission
-  const handleSearchSubmit = async (event) => {
+  const handleSearchSubmit = (event) => {
     if (event.type === "click" || event.key === "Enter") {
-      if (!mapRef) {
-        setErrorMessage("Map is not ready yet. Please try again.");
-        return;
-      }
       const searchTerm = search.toLowerCase();
       const farm = farmers.find(
         (f) =>
@@ -213,396 +86,299 @@ const Home = () => {
           f.farmLocation.toLowerCase().includes(searchTerm)
       );
 
-      if (farm) {
-        const markerLatLng = getMarkerPosition(farm.coordinates);
-        mapRef.flyTo(markerLatLng, 16, { duration: 1.5 });
+      if (farm && mapRef) {
+        mapRef.flyTo(farm.coordinates, 16, { duration: 1.5 });
         setIsDropdownOpen(false);
-        setGeocodedLocation(null);
-        setErrorMessage("");
-      } else {
-        const geocodedResults = await geocodeAddress(searchTerm);
-        if (geocodedResults.length > 0) {
-          if (geocodedResults.length === 1) {
-            setGeocodedLocation(geocodedResults[0]);
-            mapRef.flyTo([geocodedResults[0].lat, geocodedResults[0].lng], 16, { duration: 1.5 });
-          } else {
-            const bounds = L.latLngBounds(geocodedResults.map((loc) => [loc.lat, loc.lng]));
-            mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-            setGeocodedLocation(geocodedResults);
-          }
-          setIsDropdownOpen(false);
-          setErrorMessage("");
-        } else {
-          setErrorMessage(`No results found for "${searchTerm}". Showing all farmers.`);
-          const bounds = L.latLngBounds([daOffice, ...farmers.map((f) => f.coordinates)]);
-          mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-          setGeocodedLocation(null);
-          setIsDropdownOpen(false);
-        }
       }
     }
   };
 
-  // Zoom to fit all markers
-  const zoomToFit = () => {
-    if (mapRef && farmers.length > 0) {
-      const bounds = L.latLngBounds([daOffice, ...farmers.map((f) => f.coordinates)]);
-      mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 p-6 overflow-hidden">
-      <style>
-        {`
-          @media print {
-            body {
-              background: white !important;
-            }
-            .no-print {
-              display: none !important;
-            }
-            .page-break-before {
-              page-break-before: always;
-            }
-          }
-        `}
-      </style>
-      <div className="max-w-7xl mx-auto space-y-12">
-        {/* Hero Section */}
-        <section className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 text-center animate-fade-in">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-green-800 mb-4 flex items-center justify-center">
-            <FaLeaf className="mr-3 text-green-600" />
-            <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50">
+      {/* Hero Section with Background Pattern */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-green-600 to-emerald-700">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}></div>
+        </div>
+        <div className="relative max-w-7xl mx-auto px-6 py-20 md:py-28">
+          <div className="text-center space-y-6">
+            <div className="flex justify-center items-center space-x-3 mb-4">
+              <FaTractor className="text-white text-5xl md:text-6xl animate-bounce" />
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight">
               Canlaon Farm Monitor
-            </span>
-          </h1>
-          <p className="text-lg md:text-xl text-gray-600 mb-6">
-            Real-time farm visualization and management for Canlaon City. Explore farms, analyze data, and manage agricultural insights!
-          </p>
-          <div className="flex justify-center gap-4">
-            <Link
-              to="/home/maps"
-              className="inline-flex items-center px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105"
-              data-tooltip-id="explore-maps"
-              data-tooltip-content="View interactive farm map"
-            >
-              Explore Farms <FaArrowRight className="ml-2" />
-            </Link>
-            <Link
-              to="/home/reports"
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105"
-              data-tooltip-id="view-reports"
-              data-tooltip-content="View agricultural reports"
-            >
-              View Reports <FaChartBar className="ml-2" />
-            </Link>
-          </div>
-          <Tooltip id="explore-maps" />
-          <Tooltip id="view-reports" />
-        </section>
-
-        {/* Search Bar */}
-        <div className="relative w-full max-w-md mx-auto" ref={searchRef}>
-          <div className="flex items-center bg-white/90 rounded-lg shadow-md p-2">
-            <FaSearch className="text-gray-500 mx-2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchSubmit}
-              placeholder="Search by farmer name or location..."
-              className="w-full p-2 text-gray-800 bg-transparent outline-none"
-              data-tooltip-id="search-tooltip"
-              data-tooltip-content="Type a farmer's name or address to zoom to their location"
-            />
-            <button
-              onClick={handleSearchSubmit}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              data-tooltip-id="search-btn-tooltip"
-              data-tooltip-content="Search for farmers or locations"
-            >
-              Search
-            </button>
-          </div>
-          {isDropdownOpen && suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-              {suggestions.map((farmer) => (
-                <li
-                  key={farmer.id}
-                  onClick={() => handleSuggestionClick(farmer)}
-                  className="px-4 py-2 text-sm text-gray-800 hover:bg-green-50 cursor-pointer transition-colors"
-                >
-                  {farmer.name} - {farmer.farmLocation}
-                </li>
-              ))}
-            </ul>
-          )}
-          {errorMessage && (
-            <div className="absolute z-50 w-full mt-1 bg-red-100 border border-red-200 rounded-lg p-2 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
-          <Tooltip id="search-tooltip" />
-          <Tooltip id="search-btn-tooltip" />
-        </div>
-
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div
-            className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-6 text-center hover:shadow-2xl transition-shadow cursor-pointer"
-            onClick={() => navigate("/farmers")}
-            data-tooltip-id="total-farmers-tooltip"
-            data-tooltip-content="View all farmers"
-          >
-            <FaChartPie className="text-green-600 text-3xl mx-auto mb-2" />
-            <h3 className="text-xl font-semibold text-gray-800">Total Farmers</h3>
-            <p className="text-2xl font-bold text-green-700">{stats.totalFarmers}</p>
-          </div>
-          <div
-            className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-6 text-center hover:shadow-2xl transition-shadow cursor-pointer"
-            onClick={() => navigate("/reports")}
-            data-tooltip-id="total-area-tooltip"
-            data-tooltip-content="View production reports"
-          >
-            <FaMapMarkerAlt className="text-green-600 text-3xl mx-auto mb-2" />
-            <h3 className="text-xl font-semibold text-gray-800">Total Area</h3>
-            <p className="text-2xl font-bold text-green-700">{stats.totalHectares.toFixed(1)} ha</p>
-          </div>
-          <div
-            className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-6 text-center hover:shadow-2xl transition-shadow cursor-pointer"
-            onClick={() => navigate("/reports")}
-            data-tooltip-id="active-seasons-tooltip"
-            data-tooltip-content="View season distribution"
-          >
-            <FaLeaf className="text-green-600 text-3xl mx-auto mb-2" />
-            <h3 className="text-xl font-semibold text-gray-800">Active Seasons</h3>
-            <p className="text-2xl font-bold text-green-700">{stats.activeSeasons}</p>
-          </div>
-          <Tooltip id="total-farmers-tooltip" />
-          <Tooltip id="total-area-tooltip" />
-          <Tooltip id="active-seasons-tooltip" />
-        </div>
-
-        {/* Map Section */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden h-[500px] transition-all duration-300 hover:shadow-3xl page-break-before">
-          {loading ? (
-            <div className="flex justify-center items-center h-full">
-              <FaSpinner className="text-5xl text-green-600 animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="p-4 flex justify-between items-center no-print">
-                <h2 className="text-xl font-semibold text-green-800 flex items-center">
-                  <FaMap className="mr-2 text-green-600" /> Farm Map
-                </h2>
-                <button
-                  onClick={zoomToFit}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  data-tooltip-id="zoom-fit-tooltip"
-                  data-tooltip-content="Zoom to fit all farms"
-                >
-                  Zoom to Fit
-                </button>
-                <Tooltip id="zoom-fit-tooltip" />
+            </h1>
+            <p className="text-xl md:text-2xl text-green-50 max-w-3xl mx-auto font-light">
+              Empowering agricultural growth through real-time farm visualization and data-driven insights
+            </p>
+            
+            {/* Search Bar in Hero */}
+            <div className="max-w-2xl mx-auto mt-10" ref={searchRef}>
+              <div className="relative">
+                <div className="flex items-center bg-white rounded-2xl shadow-2xl p-2 transition-all duration-300 hover:shadow-3xl">
+                  <FaSearch className="text-gray-400 ml-4 text-xl" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={handleSearchSubmit}
+                    placeholder="Search farmers, locations, or crops..."
+                    className="flex-1 px-4 py-4 text-gray-800 bg-transparent outline-none text-lg"
+                  />
+                  <button
+                    onClick={handleSearchSubmit}
+                    className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105"
+                  >
+                    Search
+                  </button>
+                </div>
+                {isDropdownOpen && suggestions.length > 0 && (
+                  <ul className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
+                    {suggestions.map((farmer) => (
+                      <li
+                        key={farmer.id}
+                        onClick={() => handleSuggestionClick(farmer)}
+                        className="px-6 py-4 text-gray-800 hover:bg-green-50 cursor-pointer transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between"
+                      >
+                        <span>
+                          <span className="font-semibold">{farmer.name}</span>
+                          <span className="text-gray-500 text-sm ml-2">• {farmer.farmLocation}</span>
+                        </span>
+                        <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                          {farmer.vegetable}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <MapContainer
-                center={defaultCenter}
-                zoom={defaultZoom}
-                style={{ height: "calc(100% - 56px)", width: "100%" }}
-                whenCreated={setMapRef}
-                zoomControl={false}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
-                />
-                <ZoomControl position="topright" />
-                <LayersControl position="topright">
-                  <LayersControl.BaseLayer checked name="OpenStreetMap">
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
-                    />
-                  </LayersControl.BaseLayer>
-                  <LayersControl.Overlay name="DA Office">
-                    <LayerGroup>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-16 space-y-16">
+        {/* Stats Dashboard - Enhanced Design */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 -mt-20 relative z-10">
+          <div className="group bg-white rounded-3xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-green-500">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-4 bg-green-100 rounded-2xl group-hover:bg-green-200 transition-colors">
+                <FaUsers className="text-green-600 text-4xl" />
+              </div>
+              <div className="text-right">
+                <p className="text-4xl font-black text-gray-800">{stats.totalFarmers}</p>
+                <p className="text-sm text-gray-500 font-medium">Registered</p>
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Total Farmers</h3>
+            <p className="text-gray-500 text-sm mt-2">Active farming community</p>
+          </div>
+
+          <div className="group bg-white rounded-3xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-emerald-500">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-4 bg-emerald-100 rounded-2xl group-hover:bg-emerald-200 transition-colors">
+                <FaMapMarkerAlt className="text-emerald-600 text-4xl" />
+              </div>
+              <div className="text-right">
+                <p className="text-4xl font-black text-gray-800">{stats.totalHectares.toFixed(1)}</p>
+                <p className="text-sm text-gray-500 font-medium">Hectares</p>
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Total Farm Area</h3>
+            <p className="text-gray-500 text-sm mt-2">Under cultivation</p>
+          </div>
+
+          <div className="group bg-white rounded-3xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-t-4 border-teal-500">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-4 bg-teal-100 rounded-2xl group-hover:bg-teal-200 transition-colors">
+                <FaSeedling className="text-teal-600 text-4xl" />
+              </div>
+              <div className="text-right">
+                <p className="text-4xl font-black text-gray-800">{stats.activeSeasons}</p>
+                <p className="text-sm text-gray-500 font-medium">Active</p>
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Crop Seasons</h3>
+            <p className="text-gray-500 text-sm mt-2">Currently farming</p>
+          </div>
+        </div>
+
+        {/* Interactive Map Section - Modern Design */}
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+          <div className="p-8 bg-gradient-to-r from-green-600 to-emerald-600">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-white/20 rounded-xl">
+                  <FaMap className="text-white text-3xl" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold text-white">Live Farm Locations</h2>
+                  <p className="text-green-50">Real-time monitoring across Canlaon City</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="h-[600px] relative">
+            <MapContainer
+              center={defaultCenter}
+              zoom={defaultZoom}
+              style={{ height: "100%", width: "100%" }}
+              whenCreated={setMapRef}
+              zoomControl={false}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; OpenStreetMap contributors'
+              />
+              <ZoomControl position="topright" />
+              
+              <LayersControl position="topright">
+                <LayersControl.BaseLayer checked name="Street Map">
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                </LayersControl.BaseLayer>
+                
+                <LayersControl.Overlay name="DA Office" checked>
+                  <LayerGroup>
+                    <Marker position={[daOffice.lat, daOffice.lng]} icon={createPinIcon("blue")}>
+                      <Popup>
+                        <div className="p-2">
+                          <h3 className="font-bold text-blue-600">DA Office Canlaon</h3>
+                          <p className="text-sm text-gray-600">Department of Agriculture</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </LayerGroup>
+                </LayersControl.Overlay>
+                
+                <LayersControl.Overlay checked name="Farms">
+                  <LayerGroup>
+                    {farmers.map((farm) => (
                       <Marker
-                        position={[daOffice.lat, daOffice.lng]}
-                        icon={createPinIcon("blue")}
-                        eventHandlers={{
-                          click: () => {
-                            mapRef.flyTo([daOffice.lat, daOffice.lng], 16, { duration: 1.5 });
-                          },
-                        }}
+                        key={farm.id}
+                        position={farm.coordinates}
+                        icon={createPinIcon(getIconColor(farm.vegetable))}
                       >
                         <Popup>
-                          <div className="p-2">
-                            <h3 className="font-semibold text-green-800">DA Office</h3>
+                          <div className="p-3 min-w-[200px]">
+                            <h3 className="font-bold text-lg text-green-700 mb-2">{farm.name}</h3>
+                            <div className="space-y-1 text-sm">
+                              <p className="flex justify-between">
+                                <span className="text-gray-600">Crop:</span>
+                                <span className="font-semibold">{farm.vegetable}</span>
+                              </p>
+                              <p className="flex justify-between">
+                                <span className="text-gray-600">Area:</span>
+                                <span className="font-semibold">{farm.hectares} ha</span>
+                              </p>
+                              <p className="flex justify-between">
+                                <span className="text-gray-600">Location:</span>
+                                <span className="font-semibold">{farm.farmLocation}</span>
+                              </p>
+                            </div>
+                            <button className="mt-3 w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold">
+                              View Profile
+                            </button>
                           </div>
                         </Popup>
                       </Marker>
-                    </LayerGroup>
-                  </LayersControl.Overlay>
-                  <LayersControl.Overlay checked name="Farmers">
-                    <LayerGroup>
-                      {farmers.map((farm) => {
-                        const position = getMarkerPosition(farm.coordinates);
-                        const iconColor = getIconColor(farm.vegetable);
-                        return (
-                          <Marker
-                            key={farm.id}
-                            position={position}
-                            icon={createPinIcon(iconColor)}
-                            eventHandlers={{
-                              click: () => {
-                                mapRef.flyTo(position, 16, { duration: 1.5 });
-                              },
-                            }}
-                          >
-                            <Popup>
-                              <div className="p-2">
-                                <h3 className="font-semibold text-green-800">{farm.name}</h3>
-                                <p className="text-sm text-gray-600"><strong>Crop:</strong> {farm.vegetable}</p>
-                                <p className="text-sm text-gray-600"><strong>Area:</strong> {farm.hectares} hectares</p>
-                                <p className="text-sm text-gray-600"><strong>Location:</strong> {farm.farmLocation}</p>
-                                <Link
-                                  to={`/farmer/${farm.id}`}
-                                  className="mt-2 inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                                  data-tooltip-id={`profile-${farm.id}`}
-                                  data-tooltip-content="View farmer's profile"
-                                >
-                                  <FaUser className="mr-2" />
-                                  View Profile
-                                </Link>
-                                <Tooltip id={`profile-${farm.id}`} />
-                              </div>
-                            </Popup>
-                          </Marker>
-                        );
-                      })}
-                    </LayerGroup>
-                  </LayersControl.Overlay>
-                </LayersControl>
-                {geocodedLocation && Array.isArray(geocodedLocation) ? (
-                  geocodedLocation.map((loc, index) => (
-                    <Marker
-                      key={`geocoded-${index}`}
-                      position={[loc.lat, loc.lng]}
-                      icon={createPinIcon("purple")}
-                      eventHandlers={{
-                        click: () => {
-                          mapRef.flyTo([loc.lat, loc.lng], 16, { duration: 1.5 });
-                        },
-                      }}
-                    >
-                      <Popup>{loc.display_name}</Popup>
-                    </Marker>
-                  ))
-                ) : geocodedLocation && (
-                  <Marker
-                    position={[geocodedLocation.lat, geocodedLocation.lng]}
-                    icon={createPinIcon("purple")}
-                    eventHandlers={{
-                      click: () => {
-                        mapRef.flyTo([geocodedLocation.lat, geocodedLocation.lng], 16, { duration: 1.5 });
-                      },
-                    }}
-                  >
-                    <Popup>{geocodedLocation.display_name}</Popup>
-                  </Marker>
-                )}
-              </MapContainer>
-            </>
-          )}
+                    ))}
+                  </LayerGroup>
+                </LayersControl.Overlay>
+              </LayersControl>
+            </MapContainer>
+          </div>
         </div>
 
-        {/* Overview Section */}
-        <section className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 page-break-before">
-          <h2 className="text-2xl font-bold text-green-800 mb-6 flex items-center">
-            <FaChartBar className="mr-2 text-green-600" /> Explore More Features
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-green-50 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
-              <FaChartBar className="text-green-600 text-4xl mb-4" />
-              <h3 className="text-xl font-semibold text-gray-800">Reports</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Analyze agricultural data with real-time charts on crop trends, production by barangay, and more. Download reports as CSV or PDF.
-              </p>
-              <Link
-                to="/home/reports"
-                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105"
-                data-tooltip-id="reports-overview"
-                data-tooltip-content="View detailed agricultural reports"
-              >
-                View Reports <FaArrowRight className="ml-2" />
-              </Link>
-              <Tooltip id="reports-overview" />
-            </div>
-            <div className="bg-green-50 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
-              <FaUsers className="text-green-600 text-4xl mb-4" />
-              <h3 className="text-xl font-semibold text-gray-800">Farmers List</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Browse detailed profiles of all farmers, including their crops, farm size, and contact information.
-              </p>
-              <Link
-                to="/home/farmer"
-                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105"
-                data-tooltip-id="farmers-overview"
-                data-tooltip-content="View all farmer profiles"
-              >
-                View Farmers <FaArrowRight className="ml-2" />
-              </Link>
-              <Tooltip id="farmers-overview" />
-            </div>
-            <div className="bg-green-50 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
-              <FaMap className="text-green-600 text-4xl mb-4" />
-              <h3 className="text-xl font-semibold text-gray-800">Interactive Map</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Visualize farm locations with an interactive map. Search, zoom, and explore farm details in real-time.
-              </p>
-              <Link
-                to="/home/maps"
-                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105"
-                data-tooltip-id="map-overview"
-                data-tooltip-content="Explore the interactive farm map"
-              >
-                Explore Map <FaArrowRight className="ml-2" />
-              </Link>
-              <Tooltip id="map-overview" />
-            </div>
-          </div>
-        </section>
-
-        {/* Coordinate Display and Info */}
-        <div className="flex flex-col md:flex-row justify-between gap-4">
-          {cursorCoords.lat && cursorCoords.lng && (
-            <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4 text-sm text-gray-800 flex-1">
-              <p><strong>Lat:</strong> {cursorCoords.lat}, <strong>Lng:</strong> {cursorCoords.lng}</p>
-            </div>
-          )}
-          <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-4 flex-1">
-            <button
-              onClick={() => setIsInfoOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between text-lg font-semibold text-green-800 hover:text-green-700 transition-colors"
-              data-tooltip-id="map-info-tooltip"
-              data-tooltip-content="Toggle map insights"
-            >
-              <span className="flex items-center">
-                <FaInfoCircle className="mr-2 text-green-600" />
-                Map Insights
-              </span>
-              <span>{isInfoOpen ? "▲" : "▼"}</span>
-            </button>
-            {isInfoOpen && (
-              <div className="mt-2 text-gray-700 animate-fade-in">
-                <p className="text-sm">
-                  This map shows real-time farmer locations in Canlaon City. Search by farmer name or address to auto-zoom to specific locations or explore all farmers and the DA Office.
-                </p>
+        {/* Feature Cards - Modern Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="group bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl p-8 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer">
+            <div className="mb-6">
+              <div className="inline-block p-4 bg-white/20 rounded-2xl mb-4">
+                <FaChartLine className="text-5xl" />
               </div>
-            )}
-            <Tooltip id="map-info-tooltip" />
+              <h3 className="text-2xl font-bold mb-2">Analytics & Reports</h3>
+              <p className="text-green-50">
+                Comprehensive agricultural data analysis with real-time charts and downloadable reports
+              </p>
+            </div>
+            <button className="flex items-center space-x-2 text-white font-semibold group-hover:translate-x-2 transition-transform">
+              <span>Explore Reports</span>
+              <FaArrowRight />
+            </button>
           </div>
+
+          <div className="group bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-8 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer">
+            <div className="mb-6">
+              <div className="inline-block p-4 bg-white/20 rounded-2xl mb-4">
+                <FaUsers className="text-5xl" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Farmer Directory</h3>
+              <p className="text-emerald-50">
+                Complete database of registered farmers with detailed profiles and contact information
+              </p>
+            </div>
+            <button className="flex items-center space-x-2 text-white font-semibold group-hover:translate-x-2 transition-transform">
+              <span>View Directory</span>
+              <FaArrowRight />
+            </button>
+          </div>
+
+          <div className="group bg-gradient-to-br from-teal-500 to-cyan-600 rounded-3xl p-8 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer">
+            <div className="mb-6">
+              <div className="inline-block p-4 bg-white/20 rounded-2xl mb-4">
+                <FaLeaf className="text-5xl" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Crop Insights</h3>
+              <p className="text-teal-50">
+                Track crop distribution, seasonal patterns, and agricultural productivity metrics
+              </p>
+            </div>
+            <button className="flex items-center space-x-2 text-white font-semibold group-hover:translate-x-2 transition-transform">
+              <span>View Insights</span>
+              <FaArrowRight />
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Stats Bar */}
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-3xl p-8 text-white shadow-xl">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+            <div>
+              <p className="text-4xl font-black mb-2">100%</p>
+              <p className="text-green-50">System Uptime</p>
+            </div>
+            <div>
+              <p className="text-4xl font-black mb-2">Real-time</p>
+              <p className="text-green-50">Data Updates</p>
+            </div>
+            <div>
+              <p className="text-4xl font-black mb-2">24/7</p>
+              <p className="text-green-50">Monitoring</p>
+            </div>
+            <div>
+              <p className="text-4xl font-black mb-2">Secure</p>
+              <p className="text-green-50">Cloud Storage</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <div className="flex justify-center items-center space-x-3 mb-4">
+            <FaTractor className="text-4xl text-green-400" />
+          </div>
+          <h3 className="text-2xl font-bold mb-2">Canlaon Farm Monitor</h3>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Empowering agricultural communities through technology and data-driven insights
+          </p>
+          <p className="text-gray-500 text-sm mt-6">
+            © 2026 Department of Agriculture - Canlaon City. All rights reserved.
+          </p>
         </div>
       </div>
     </div>

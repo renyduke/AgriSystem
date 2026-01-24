@@ -595,7 +595,7 @@ const FarmerRegister = () => {
                     title={`Harvest is typically ${newCrop.name && vegetables.find(v => v.name === newCrop.name)?.harvestAfter ? calculateDuration(vegetables.find(v => v.name === newCrop.name).harvestAfter) : "~1-4 months"} after planting.`}
                   />
                 </div>
-              </div>
+              </div>  
               <button
                 type="button"
                 onClick={addCrop}

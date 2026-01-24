@@ -722,6 +722,6 @@ const Farmer = () => {
       )}
     </div>
   );
-};
+}; 
 
 export default Farmer;

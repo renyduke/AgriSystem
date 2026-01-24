@@ -20,6 +20,8 @@ import LogOut from "./pages/AdminPages/Logout";
 import DamageReport from "./pages/AdminPages/Damage Report";
 import Drawmap from "./pages/AdminPages/DrawMap";
 import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
+import Dashboard from "./pages/AdminPages/Dashboard";
+
 
 function App() {
   return (
@@ -54,6 +56,7 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />
           <Route path="farmer" element={<Farmer />} />
+          <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
         {/* Root-level fallback for farmer profile (optional, for non-admin access) */}
