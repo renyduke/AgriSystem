@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AdminLayout from "./layouts/AdminLayout";
 import SignIn from "./pages/frontpages/SignIn";
+import ForgotPassword from "./pages/frontpages/ForgotPassword";
 import SignUp from "./pages/AdminPages/SignUp";
 import AdminDashboard from "./pages/AdminPages/Home";
 import Maps from "./pages/AdminPages/Maps";
@@ -23,12 +24,14 @@ import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 import Dashboard from "./pages/AdminPages/Dashboard";
 
 
+
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<SignIn />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
         </Route>
 
         {/* Admin Routes */}
@@ -57,6 +60,7 @@ function App() {
           <Route path="logout" element={<LogOut />} />
           <Route path="farmer" element={<Farmer />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="reports" element={<Reports />} />
         </Route>
 
         {/* Root-level fallback for farmer profile (optional, for non-admin access) */}
@@ -79,3 +83,5 @@ function App() {
 }
 
 export default App;
+
+

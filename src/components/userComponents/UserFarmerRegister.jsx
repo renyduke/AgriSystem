@@ -21,14 +21,13 @@ const FarmerRegister = () => {
     hectares: "",
     season: "Default",
     landOwnership: "", // Added Land Ownership
-    farmType: "", // Added Farm Type
     mainCrops: [],
     area: [],
     coordinates: [10.3860, 123.2220],
   });
   const [selectedAddressBarangay, setSelectedAddressBarangay] = useState("");
   const [selectedFarmBarangay, setSelectedFarmBarangay] = useState("");
-  const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "", harvestDate: "" });
+  const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "" }); // Removed harvestDate
   const [error, setError] = useState("");
   const [vegetables, setVegetables] = useState([]);
   const [loadingVegetables, setLoadingVegetables] = useState(false);
@@ -154,27 +153,7 @@ const FarmerRegister = () => {
   const handleNewCropChange = (e) => {
     const { name, value } = e.target;
     setNewCrop((prevData) => {
-      const updatedCrop = { ...prevData, [name]: value };
-
-      if (name === "plantingDate" && updatedCrop.name && value) {
-        const plantingDate = new Date(value);
-        const selectedVeggie = vegetables.find(v => v.name === updatedCrop.name);
-        if (selectedVeggie && selectedVeggie.harvestAfter) {
-          const harvestDate = new Date(plantingDate);
-          harvestDate.setDate(plantingDate.getDate() + selectedVeggie.harvestAfter);
-          updatedCrop.harvestDate = harvestDate.toISOString().split("T")[0];
-        }
-      } else if (name === "name" && value && updatedCrop.plantingDate) {
-        const plantingDate = new Date(updatedCrop.plantingDate);
-        const selectedVeggie = vegetables.find(v => v.name === value);
-        if (selectedVeggie && selectedVeggie.harvestAfter) {
-          const harvestDate = new Date(plantingDate);
-          harvestDate.setDate(plantingDate.getDate() + selectedVeggie.harvestAfter);
-          updatedCrop.harvestDate = harvestDate.toISOString().split("T")[0];
-        }
-      }
-
-      return updatedCrop;
+      return { ...prevData, [name]: value };
     });
     setError("");
   };
@@ -186,21 +165,13 @@ const FarmerRegister = () => {
   };
 
   const addCrop = () => {
-    if (newCrop.name && newCrop.plantingDate && newCrop.harvestDate && vegetables.some(v => v.name === newCrop.name)) {
-      const plantingDate = new Date(newCrop.plantingDate);
-      const harvestDate = new Date(newCrop.harvestDate);
-
-      if (plantingDate >= harvestDate) {
-        setError("Harvest date must be after planting date.");
-        return;
-      }
-
+    if (newCrop.name && newCrop.plantingDate && vegetables.some(v => v.name === newCrop.name)) {
       setIsAddingCrop(true);
       setFarmerData((prevData) => ({
         ...prevData,
         mainCrops: [...prevData.mainCrops, { ...newCrop }],
       }));
-      setNewCrop({ name: "", plantingDate: "", harvestDate: "" });
+      setNewCrop({ name: "", plantingDate: "" });
       setError("");
       setLocalReply({ type: "success", message: "Crop added successfully (Localhost)" });
       setTimeout(() => {
@@ -208,7 +179,7 @@ const FarmerRegister = () => {
         setLocalReply(null);
       }, 2000);
     } else {
-      setError("Please fill out all fields for the crop, and ensure the vegetable is from the predefined list.");
+      setError("Please select a vegetable and planting date.");
     }
   };
 
@@ -223,7 +194,7 @@ const FarmerRegister = () => {
     e.preventDefault();
 
     if (farmerData.mainCrops.length === 0) {
-      setError("Please add at least one crop with its timeline.");
+      setError("Please add at least one crop.");
       return;
     }
 
@@ -257,11 +228,6 @@ const FarmerRegister = () => {
       return;
     }
 
-    if (!farmerData.farmType) {
-      setError("Please select farm type.");
-      return;
-    }
-
     if (isGeocoding) {
       setError("Please wait for location data to process.");
       return;
@@ -270,7 +236,7 @@ const FarmerRegister = () => {
     setIsSubmitting(true);
     try {
       const flattenedCrops = farmerData.mainCrops.reduce((acc, crop, index) => {
-        acc[`crop${index + 1}`] = { name: crop.name, plantingDate: crop.plantingDate, harvestDate: crop.harvestDate };
+        acc[`crop${index + 1}`] = { name: crop.name, plantingDate: crop.plantingDate };
         return acc;
       }, {});
 
@@ -281,8 +247,7 @@ const FarmerRegister = () => {
         address: `${farmerData.addressBarangay}, ${farmerData.addressSitio}, Canlaon City`,
         farmLocation: `${farmerData.farmBarangay}, ${farmerData.farmSitio}, Canlaon City`,
         hectares: parseFloat(farmerData.hectares),
-        landOwnership: farmerData.landOwnership, // Added to Firestore
-        farmType: farmerData.farmType, // Added to Firestore
+        landOwnership: farmerData.landOwnership,
         mainCrops: flattenedCrops,
         area: farmerData.area,
       });
@@ -293,7 +258,6 @@ const FarmerRegister = () => {
           name: crop.name,
           farmerId: farmerId,
           plantingDate: crop.plantingDate,
-          harvestDate: crop.harvestDate,
         })
       );
       await Promise.all(vegetablePromises);
@@ -313,14 +277,13 @@ const FarmerRegister = () => {
         hectares: "",
         season: "Default",
         landOwnership: "",
-        farmType: "",
         mainCrops: [],
         area: [],
         coordinates: [10.3860, 123.2220],
       });
       setSelectedAddressBarangay("");
       setSelectedFarmBarangay("");
-      setNewCrop({ name: "", plantingDate: "", harvestDate: "" });
+      setNewCrop({ name: "", plantingDate: "" });
       setError("");
       setTimeout(() => {
         setLocalReply(null);
@@ -501,7 +464,8 @@ const FarmerRegister = () => {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Removed farmType field */}
+          <div className="grid grid-cols-1 gap-4">
             <select
               name="landOwnership"
               value={farmerData.landOwnership}
@@ -513,19 +477,6 @@ const FarmerRegister = () => {
               <option value="Owned">Owned</option>
               <option value="Tenant">Tenant</option>
               <option value="Lessee">Lessee</option>
-            </select>
-            <select
-              name="farmType"
-              value={farmerData.farmType}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            >
-              <option value="">Select Farm Type</option>
-              <option value="Irrigated">Irrigated</option>
-              <option value="Rainfed">Rainfed</option>
-              <option value="Upland">Upland</option>
-              <option value="Lowland">Lowland</option>
             </select>
           </div>
 
@@ -539,7 +490,6 @@ const FarmerRegister = () => {
                     Farm Location: {farmerData.farmSitio}, {farmerData.farmBarangay}, Canlaon City <br />
                     Coordinates: {farmerData.coordinates[0]}, {farmerData.coordinates[1]} <br />
                     Land Ownership: {farmerData.landOwnership} <br />
-                    Farm Type: {farmerData.farmType} <br />
                     (Check if this matches the expected location.)
                   </Popup>
                 </Marker>
@@ -549,7 +499,7 @@ const FarmerRegister = () => {
 
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-green-800 flex items-center">
-              <FaTractor className="mr-2" /> Crop Harvest Timeline
+              <FaTractor className="mr-2" /> Crop Information
             </h3>
             <div className="space-y-4 border rounded-xl p-4 bg-green-50">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -572,30 +522,17 @@ const FarmerRegister = () => {
                   </p>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center border rounded-xl p-3 bg-white relative">
-                  <FaCalendarAlt className="text-green-700 mx-2" />
-                  <input
-                    type="date"
-                    name="plantingDate"
-                    value={newCrop.plantingDate}
-                    onChange={handleNewCropChange}
-                    className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                    title="Select the date when you plan to plant the crop."
-                  />
-                </div>
-                <div className="flex items-center border rounded-xl p-3 bg-white relative">
-                  <FaCalendarAlt className="text-green-700 mx-2" />
-                  <input
-                    type="date"
-                    name="harvestDate"
-                    value={newCrop.harvestDate}
-                    onChange={handleNewCropChange}
-                    className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                    title={`Harvest is typically ${newCrop.name && vegetables.find(v => v.name === newCrop.name)?.harvestAfter ? calculateDuration(vegetables.find(v => v.name === newCrop.name).harvestAfter) : "~1-4 months"} after planting.`}
-                  />
-                </div>
-              </div>  
+              <div className="flex items-center border rounded-xl p-3 bg-white relative">
+                <FaCalendarAlt className="text-green-700 mx-2" />
+                <input
+                  type="date"
+                  name="plantingDate"
+                  value={newCrop.plantingDate}
+                  onChange={handleNewCropChange}
+                  className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                  title="Select the date when you plan to plant the crop."
+                />
+              </div>
               <button
                 type="button"
                 onClick={addCrop}
@@ -612,7 +549,7 @@ const FarmerRegister = () => {
                   <div key={index} className="flex items-center justify-between p-3 bg-green-100 rounded-xl shadow-sm">
                     <div>
                       <p className="text-sm font-semibold text-green-700">{crop.name}</p>
-                      <p className="text-xs text-gray-600">Planting: {crop.plantingDate} | Harvest: {crop.harvestDate}</p>
+                      <p className="text-xs text-gray-600">Planting Date: {crop.plantingDate}</p>
                     </div>
                     <button type="button" onClick={() => removeCrop(index)} className="text-red-500 hover:text-red-700">
                       <FaTimes />

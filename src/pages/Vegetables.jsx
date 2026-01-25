@@ -8,7 +8,7 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { FaPlus, FaTrash, FaEdit, FaInfoCircle, FaLeaf } from "react-icons/fa";
+import { FaPlus, FaTrash, FaEdit, FaSearch, FaLeaf } from "react-icons/fa";
 
 // Basic Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -35,10 +35,8 @@ const Vegetables = () => {
   const [vegetables, setVegetables] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newVeggieName, setNewVeggieName] = useState("");
-  const [newVeggieHarvestAfter, setNewVeggieHarvestAfter] = useState("");
   const [editingVeggie, setEditingVeggie] = useState(null);
-  const [editVeggieName, setEditVeggieName] = useState(""); // Added missing useState
-  const [editVeggieHarvestAfter, setEditVeggieHarvestAfter] = useState(""); // Added missing useState
+  const [editVeggieName, setEditVeggieName] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -53,7 +51,6 @@ const Vegetables = () => {
       const veggieList = veggieSnapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name,
-        harvestAfter: doc.data().harvestAfter || 60,
       }));
       setVegetables(veggieList);
     } catch (error) {
@@ -66,14 +63,13 @@ const Vegetables = () => {
 
   const handleAddVegetable = async (e) => {
     e.preventDefault();
-    if (
-      !newVeggieName.trim() ||
-      !newVeggieHarvestAfter ||
-      isNaN(newVeggieHarvestAfter) ||
-      newVeggieHarvestAfter <= 0 ||
-      vegetables.some((v) => v.name.toLowerCase() === newVeggieName.trim().toLowerCase())
-    ) {
-      alert("Please enter a unique vegetable name and a valid harvest duration (positive number of days)");
+    if (!newVeggieName.trim()) {
+      alert("Please enter a vegetable name");
+      return;
+    }
+
+    if (vegetables.some((v) => v.name.toLowerCase() === newVeggieName.trim().toLowerCase())) {
+      alert("This vegetable already exists in the list");
       return;
     }
 
@@ -81,10 +77,8 @@ const Vegetables = () => {
       setLoading(true);
       await addDoc(collection(db, "vegetables_list"), {
         name: newVeggieName.trim(),
-        harvestAfter: parseInt(newVeggieHarvestAfter),
       });
       setNewVeggieName("");
-      setNewVeggieHarvestAfter("");
       await fetchVegetables();
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2000);
@@ -97,26 +91,22 @@ const Vegetables = () => {
   };
 
   const handleEditVegetable = async (veggie) => {
-    if (
-      editVeggieName.trim() &&
-      editVeggieHarvestAfter &&
-      !isNaN(editVeggieHarvestAfter) &&
-      editVeggieHarvestAfter > 0 &&
-      (editVeggieName !== veggie.name || editVeggieHarvestAfter !== veggie.harvestAfter) &&
-      !vegetables.some(
+    if (editVeggieName.trim() && editVeggieName !== veggie.name) {
+      if (vegetables.some(
         (v) => v.name.toLowerCase() === editVeggieName.trim().toLowerCase() && v.id !== veggie.id
-      )
-    ) {
+      )) {
+        alert("This vegetable name already exists");
+        return;
+      }
+      
       try {
         setLoading(true);
         const veggieDoc = doc(db, "vegetables_list", veggie.id);
         await updateDoc(veggieDoc, {
           name: editVeggieName.trim(),
-          harvestAfter: parseInt(editVeggieHarvestAfter),
         });
         setEditingVeggie(null);
         setEditVeggieName("");
-        setEditVeggieHarvestAfter("");
         await fetchVegetables();
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 2000);
@@ -127,10 +117,9 @@ const Vegetables = () => {
         setLoading(false);
       }
     } else {
-      alert("Please enter a unique vegetable name and a valid harvest duration");
+      alert("Please enter a valid and unique vegetable name");
       setEditingVeggie(null);
       setEditVeggieName("");
-      setEditVeggieHarvestAfter("");
     }
   };
 
@@ -156,185 +145,143 @@ const Vegetables = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6">
-            <div className="flex justify-between items-center mb-6">
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-4 md:p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
               <h2 className="text-2xl font-bold text-green-800 flex items-center">
-                <FaLeaf className="mr-2 text-green-600" /> Vegetable List Management
+                <FaLeaf className="mr-2 text-green-600" /> Vegetable List
               </h2>
-              <button
-                onClick={() => document.getElementById("addVeggieForm").scrollIntoView({ behavior: "smooth" })}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200 transform hover:scale-105 flex items-center gap-2"
-                disabled={loading}
-              >
-                <FaPlus /> Add Vegetable
-              </button>
-            </div>
-
-            {/* Search Bar */}
-            <div className="mb-6">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search vegetables..."
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Table */}
-            {loading ? (
-              <div className="text-center py-6 text-gray-600">Loading...</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-green-100 text-green-800">
-                      <th className="p-2 border-b text-left">Vegetable</th>
-                      <th className="p-2 border-b text-left">Harvest Duration (days)</th>
-                      <th className="p-2 border-b text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredVegetables.map((vegetable) => (
-                      <tr key={vegetable.id} className="hover:bg-green-50 transition-colors">
-                        {editingVeggie?.id === vegetable.id ? (
-                          <td colSpan="3" className="p-4 bg-white">
-                            <div className="space-y-2">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700">
-                                  Vegetable Name
-                                </label>
-                                <input
-                                  type="text"
-                                  value={editVeggieName}
-                                  onChange={(e) => setEditVeggieName(e.target.value)}
-                                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700">
-                                  Harvest Duration (days)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={editVeggieHarvestAfter}
-                                  onChange={(e) => setEditVeggieHarvestAfter(e.target.value)}
-                                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                  min="1"
-                                />
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <button
-                                  onClick={() => handleEditVegetable(vegetable)}
-                                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingVeggie(null);
-                                    setEditVeggieName("");
-                                    setEditVeggieHarvestAfter("");
-                                  }}
-                                  className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        ) : (
-                          <>
-                            <td className="p-2 border-b">
-                              <span className="text-gray-800">{vegetable.name}</span>
-                            </td>
-                            <td className="p-2 border-b">
-                              <span className="text-gray-800">{vegetable.harvestAfter}</span>
-                            </td>
-                            <td className="p-2 border-b">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingVeggie(vegetable);
-                                    setEditVeggieName(vegetable.name);
-                                    setEditVeggieHarvestAfter(vegetable.harvestAfter);
-                                  }}
-                                  className="text-blue-600 hover:text-blue-800"
-                                  title="Edit"
-                                >
-                                  <FaEdit />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteVegetable(vegetable.id)}
-                                  className="text-red-500 hover:text-red-700"
-                                  title="Delete"
-                                >
-                                  <FaTrash />
-                                </button>
-                                <button className="text-gray-500 hover:text-gray-700" title="View Info">
-                                  <FaInfoCircle />
-                                </button>
-                              </div>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredVegetables.length === 0 && (
-                  <p className="text-center py-4 text-gray-600">No vegetables found.</p>
-                )}
+              
+              {/* Search Bar */}
+              <div className="relative w-full md:w-64">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search vegetables..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
+                  disabled={loading}
+                />
               </div>
-            )}
+            </div>
 
             {/* Add Vegetable Form */}
-            <div id="addVeggieForm" className="mt-6 p-4 bg-white/80 rounded-lg shadow-inner">
-              <form onSubmit={handleAddVegetable} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Vegetable Name
-                  </label>
+            <div className="mb-6 p-4 bg-green-50 rounded-xl">
+              <h3 className="text-lg font-semibold text-green-800 mb-4">Add New Vegetable</h3>
+              <form onSubmit={handleAddVegetable} className="flex flex-col md:flex-row gap-3">
+                <div className="flex-1">
                   <input
                     type="text"
                     value={newVeggieName}
                     onChange={(e) => setNewVeggieName(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
                     placeholder="Enter vegetable name"
-                    disabled={loading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Harvest Duration (days)
-                  </label>
-                  <input
-                    type="number"
-                    value={newVeggieHarvestAfter}
-                    onChange={(e) => setNewVeggieHarvestAfter(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
-                    placeholder="Days to harvest"
-                    min="1"
                     disabled={loading}
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2"
+                  className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
                 >
                   <FaPlus /> Add Vegetable
                 </button>
               </form>
               {showSuccess && (
-                <div className="mt-2 text-center text-green-600 font-semibold animate-fade-in">
+                <div className="mt-3 text-center text-green-600 font-semibold animate-fade-in">
                   Vegetable added successfully!
                 </div>
               )}
             </div>
+
+            {/* Vegetables List */}
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-green-800">All Vegetables ({filteredVegetables.length})</h3>
+              
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-600"></div>
+                  <p className="mt-2 text-gray-600">Loading vegetables...</p>
+                </div>
+              ) : filteredVegetables.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-xl">
+                  <p className="text-gray-600">
+                    {searchTerm ? "No vegetables match your search" : "No vegetables added yet"}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  {filteredVegetables.map((vegetable, index) => (
+                    <div key={vegetable.id} className={`flex items-center justify-between p-4 ${index !== 0 ? 'border-t border-gray-100' : ''}`}>
+                      {editingVeggie?.id === vegetable.id ? (
+                        <div className="flex-1 flex flex-col md:flex-row gap-3">
+                          <input
+                            type="text"
+                            value={editVeggieName}
+                            onChange={(e) => setEditVeggieName(e.target.value)}
+                            className="flex-1 px-4 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            placeholder="Enter vegetable name"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditVegetable(vegetable)}
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingVeggie(null);
+                                setEditVeggieName("");
+                              }}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex-1">
+                            <span className="text-gray-800 font-medium">{vegetable.name}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingVeggie(vegetable);
+                                setEditVeggieName(vegetable.name);
+                              }}
+                              className="px-3 py-2 text-blue-600 hover:text-blue-800 transition-colors"
+                              title="Edit"
+                            >
+                              <FaEdit />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteVegetable(vegetable.id)}
+                              className="px-3 py-2 text-red-500 hover:text-red-700 transition-colors"
+                              title="Delete"
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Stats */}
+            {!loading && vegetables.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <p className="text-sm text-gray-600">
+                  Total vegetables: <span className="font-semibold text-green-700">{vegetables.length}</span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

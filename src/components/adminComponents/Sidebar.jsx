@@ -399,10 +399,10 @@ const Sidebar = () => {
 
             <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">OTHER</li>
 
-            {/* Reports
+            {/* Reports */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
               <NavLink
-                to="/home/datamanagement"
+                to="/home/reports"
                 className={({ isActive }) =>
                   `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
                 }
@@ -418,7 +418,7 @@ const Sidebar = () => {
                   </motion.div>
                 )}
               </NavLink>
-            </motion.li> */}
+            </motion.li>
 
             {/* Logout */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">

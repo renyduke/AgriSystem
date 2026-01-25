@@ -1,23 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { EyeSlashIcon, EyeIcon } from "@heroicons/react/24/solid";
-import { FaSpinner, FaCheckCircle, FaTimes, FaEnvelope, FaLock } from "react-icons/fa";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../../firebase";
+import { FaSpinner, FaCheckCircle, FaTimes, FaEnvelope, FaArrowLeft } from "react-icons/fa";
 import logo from "/logo.png";
 
-export function SignIn() {
-  const [passwordShown, setPasswordShown] = useState(false);
+export function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [localReply, setLocalReply] = useState(null);
   const [focusedInput, setFocusedInput] = useState(null);
+  const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
-
-  const togglePasswordVisibility = () => setPasswordShown((prev) => !prev);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,46 +20,24 @@ export function SignIn() {
     setLoading(true);
 
     try {
-      // Sign in with Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      console.log("User signed in:", user);
-
-      // Fetch user data from Firestore
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const position = userData.position;
-
-        setLocalReply({ type: "success", message: "Login successful!" });
-        
-        // Redirect based on position
-        setTimeout(() => {
-          if (position === "admin") {
-            navigate("/home");
-          } else if (position === "user") {
-            navigate("/user");
-          } else {
-            setError("Invalid user position. Contact support.");
-            setLocalReply({ type: "error", message: "Invalid user position" });
-          }
-        }, 1500);
-      } else {
-        setError("User data not found. Please contact support.");
-        setLocalReply({ type: "error", message: "User data not found" });
-        setTimeout(() => setLocalReply(null), 3000);
-      }
+      await sendPasswordResetEmail(auth, email);
+      setEmailSent(true);
+      setLocalReply({ 
+        type: "success", 
+        message: "Password reset email sent! Check your inbox." 
+      });
+      
+      // Clear the form
+      setEmail("");
     } catch (error) {
-      console.error("Login error:", error.message);
+      console.error("Password reset error:", error.message);
       
       // User-friendly error messages
-      let errorMessage = "Login failed. Please try again.";
-      if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
-        errorMessage = "Invalid email or password.";
-      } else if (error.code === "auth/user-not-found") {
-        errorMessage = "No account found with this email.";
+      let errorMessage = "Failed to send reset email. Please try again.";
+      if (error.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email address.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address format.";
       } else if (error.code === "auth/too-many-requests") {
         errorMessage = "Too many attempts. Please try again later.";
       } else if (error.code === "auth/network-request-failed") {
@@ -77,6 +50,10 @@ export function SignIn() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBackToLogin = () => {
+    navigate("/");
   };
 
   return (
@@ -113,6 +90,15 @@ export function SignIn() {
         <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 animate-pulse-slow"></div>
         
         <div className="relative bg-white/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-white/20">
+          {/* Back Button */}
+          <button
+            onClick={handleBackToLogin}
+            className="mb-6 flex items-center gap-2 text-gray-600 hover:text-green-600 transition-colors font-medium"
+          >
+            <FaArrowLeft className="text-sm" />
+            <span>Back to Sign In</span>
+          </button>
+
           {/* Logo and Header */}
           <div className="text-center mb-8">
             <div className="relative inline-block mb-4">
@@ -124,10 +110,33 @@ export function SignIn() {
               />
             </div>
             <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
-              Welcome Back
+              Reset Password
             </h2>
-            <p className="text-gray-600 text-sm">Sign in to access your dashboard</p>
+            <p className="text-gray-600 text-sm">
+              {emailSent 
+                ? "Check your email for reset instructions" 
+                : "Enter your email to receive a password reset link"}
+            </p>
           </div>
+
+          {/* Success Message */}
+          {emailSent && (
+            <div className="mb-6 p-5 bg-green-50 border-l-4 border-green-500 rounded-lg">
+              <div className="flex items-start">
+                <FaCheckCircle className="text-green-500 mt-0.5 mr-3 flex-shrink-0 text-xl" />
+                <div>
+                  <p className="text-green-800 font-semibold mb-1">Email Sent Successfully!</p>
+                  <p className="text-green-700 text-sm">
+                    We've sent a password reset link to <span className="font-medium">{email}</span>. 
+                    Please check your inbox and follow the instructions.
+                  </p>
+                  <p className="text-green-600 text-xs mt-2">
+                    Don't see it? Check your spam folder.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Error Alert */}
           {error && (
@@ -139,7 +148,7 @@ export function SignIn() {
             </div>
           )}
 
-          {/* Sign In Form */}
+          {/* Reset Password Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Input */}
             <div className="relative">
@@ -171,61 +180,6 @@ export function SignIn() {
               </div>
             </div>
 
-            {/* Password Input */}
-            <div className="relative">
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
-                  focusedInput === 'password' ? 'text-green-500' : 'text-gray-400'
-                }`}>
-                  <FaLock className="text-lg" />
-                </div>
-                <input
-                  id="password"
-                  type={passwordShown ? "text" : "password"}
-                  placeholder="Enter your password"
-                  className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
-                    focusedInput === 'password'
-                      ? 'border-green-500 bg-white shadow-lg shadow-green-100'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onFocus={() => setFocusedInput('password')}
-                  onBlur={() => setFocusedInput(null)}
-                  required
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-green-600 transition-colors"
-                  disabled={loading}
-                  tabIndex="-1"
-                >
-                  {passwordShown ? (
-                    <EyeIcon className="h-5 w-5" />
-                  ) : (
-                    <EyeSlashIcon className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-           {/* Forgot Password Link */}
-<div className="flex justify-end">
-  <button
-    type="button"
-    onClick={() => navigate("/forgot-password")}
-    className="text-sm text-green-600 hover:text-green-700 font-medium hover:underline transition-colors"
-    disabled={loading}
-  >
-    Forgot password?
-  </button>
-</div>
-
             {/* Submit Button */}
             <button
               type="submit"
@@ -239,25 +193,36 @@ export function SignIn() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <FaSpinner className="animate-spin text-xl" />
-                  <span>Signing In...</span>
+                  <span>Sending Reset Link...</span>
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <span>Sign In</span>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                  <FaEnvelope className="text-lg" />
+                  <span>Send Reset Link</span>
                 </span>
               )}
             </button>
           </form>
 
-          {/* Footer */}
+          {/* Additional Info */}
           <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <span className="font-semibold">Note:</span> The password reset link will expire in 1 hour for security reasons.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-6">
             <p className="text-center text-sm text-gray-600">
-              Don't have an account?{" "}
-              <button className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors">
-                Contact Administrator
+              Remember your password?{" "}
+              <button 
+                onClick={handleBackToLogin}
+                className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors"
+                type="button"
+              >
+                Sign In
               </button>
             </p>
           </div>
@@ -327,4 +292,4 @@ if (typeof document !== "undefined") {
   document.head.appendChild(styleSheet);
 }
 
-export default SignIn;
+export default ForgotPassword;

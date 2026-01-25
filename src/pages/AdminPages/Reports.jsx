@@ -1,649 +1,941 @@
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
-  BarChart, Bar, PieChart, Pie, Cell, Brush
-} from "recharts";
+import React, { useEffect, useState } from "react";
+import ReactApexChart from "react-apexcharts";
 import { db } from "../../config/firebaseConfig";
-import { collection, onSnapshot } from "firebase/firestore";
-import { FaSpinner, FaDownload, FaChartBar, FaLeaf, FaPrint, FaFilePdf, FaTractor} from "react-icons/fa";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-
-const COLORS = ["#16a34a", "#ea580c", "#2563eb", "#dc2626", "#65a30d", "#f97316"];
-
-const CustomTooltip = ({ active, payload, label, formatter, labelFormatter }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white p-4 rounded-xl shadow-xl border border-green-200 backdrop-blur-sm">
-        <p className="text-green-900 font-semibold text-sm">{labelFormatter(label)}</p>
-        {payload.map((entry, index) => (
-          <p key={index} className="text-gray-700 text-sm">
-            {entry.name}: {formatter(entry.value)}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
+import { collection, getDocs } from "firebase/firestore";
+import { 
+  FaFileAlt, FaDownload, FaFilter, FaCalendar, FaChartBar, 
+  FaPrint, FaSpinner, FaTractor, FaSeedling, FaMapMarkedAlt,
+  FaUsers, FaLeaf, FaChartLine, FaChartPie, FaTable
+} from "react-icons/fa";
 
 const Reports = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [totalFarmers, setTotalFarmers] = useState(0);
-  const [totalVegetables, setTotalVegetables] = useState(0);
-  const [productionByBarangay, setProductionByBarangay] = useState([]);
-  const [highDemandVeggies, setHighDemandVeggies] = useState([]);
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [farmerCropTrends, setFarmerCropTrends] = useState([]);
-  const [totalProduction, setTotalProduction] = useState(0);
-  const [averageFarmSize, setAverageFarmSize] = useState(0);
-  const [seasonDistribution, setSeasonDistribution] = useState([]);
-  const [topProducingFarmers, setTopProducingFarmers] = useState([]);
-  const [landOwnershipDistribution, setLandOwnershipDistribution] = useState([]);
-  const [farmTypeDistribution, setFarmTypeDistribution] = useState([]);
-  const [visibleSeries, setVisibleSeries] = useState({});
-  const reportRef = useRef(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [dateRange, setDateRange] = useState("all");
+  const [selectedBarangay, setSelectedBarangay] = useState("all");
+  const [selectedCrop, setSelectedCrop] = useState("all");
+  
+  // Data states
+  const [farmers, setFarmers] = useState([]);
+  const [vegetables, setVegetables] = useState([]);
+  const [barangays, setBarangays] = useState([]);
+  const [crops, setCrops] = useState([]);
+  
+  // Analytics states
+  const [summaryStats, setSummaryStats] = useState({
+    totalFarmers: 0,
+    totalHectares: 0,
+    totalVegetables: 0,
+    activeFarms: 0,
+    avgFarmSize: 0
+  });
+  
+  const [barangayData, setBarangayData] = useState([]);
+  const [cropDistribution, setCropDistribution] = useState([]);
+  const [seasonalData, setSeasonalData] = useState([]);
+  const [landOwnershipData, setLandOwnershipData] = useState([]);
+  const [farmTypeData, setFarmTypeData] = useState([]);
+  const [productionTrends, setProductionTrends] = useState([]);
+  const [topProducers, setTopProducers] = useState([]);
 
   useEffect(() => {
-    const unsubscribeFarmers = onSnapshot(
-      collection(db, "farmers"),
-      (snapshot) => {
-        const farmers = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          type: "farmer",
-          timestamp: doc.data().timestamp || new Date().toISOString(),
-          name: doc.data().fullName || `${doc.data().firstName || ''} ${doc.data().lastName || ''}`,
-          vegetable: doc.data().mainCrops?.crop1?.name || "N/A",
-          landOwnership: doc.data().landOwnership || "Unknown",
-          farmType: doc.data().farmType || "Unknown",
-        }));
-        setTotalFarmers(snapshot.size);
-
-        const allActivities = [
-          ...farmers.map(farmer => ({
-            id: farmer.id,
-            type: "farmer",
-            name: farmer.name,
-            timestamp: farmer.timestamp,
-          })),
-        ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-         .slice(0, 5);
-        setRecentActivities(allActivities);
-
-        const barangayProd = farmers.reduce((acc, farmer) => {
-          const barangay = farmer.farmBarangay || "Unknown";
-          acc[barangay] = (acc[barangay] || 0) + (Number(farmer.hectares) || 0);
-          return acc;
-        }, {});
-        const prodData = Object.entries(barangayProd).map(([name, value]) => ({ name, value }));
-        setProductionByBarangay(prodData);
-
-        const veggieDemand = farmers.reduce((acc, farmer) => {
-          if (farmer.vegetable && farmer.hectares) {
-            acc[farmer.vegetable] = (acc[farmer.vegetable] || 0) + Number(farmer.hectares);
-          }
-          return acc;
-        }, {});
-        const demandData = Object.entries(veggieDemand)
-          .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value);
-        setHighDemandVeggies(demandData.slice(0, 5));
-
-        const cropCounts = farmers.reduce((acc, farmer) => {
-          if (farmer.mainCrops) {
-            Object.values(farmer.mainCrops).forEach(crop => {
-              if (crop.name) {
-                acc[crop.name] = (acc[crop.name] || 0) + 1;
-              }
-            });
-          }
-          return acc;
-        }, {});
-        const cropTrendsData = Object.entries(cropCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-        setFarmerCropTrends(cropTrendsData);
-
-        const totalProd = farmers.reduce((sum, farmer) => sum + Number(farmer.hectares) || 0, 0);
-        setTotalProduction(totalProd);
-
-        const avgFarmSize = snapshot.size > 0 ? totalProd / snapshot.size : 0;
-        setAverageFarmSize(avgFarmSize.toFixed(2));
-
-        const seasonDist = farmers.reduce((acc, farmer) => {
-          const season = farmer.season || "Default";
-          acc[season] = (acc[season] || 0) + 1;
-          return acc;
-        }, {});
-        const seasonData = Object.entries(seasonDist).map(([season, count]) => ({ season, count }));
-        setSeasonDistribution(seasonData);
-
-        const landOwnershipDist = farmers.reduce((acc, farmer) => {
-          const ownership = farmer.landOwnership || "Unknown";
-          acc[ownership] = (acc[ownership] || 0) + 1;
-          return acc;
-        }, {});
-        const landOwnershipData = Object.entries(landOwnershipDist).map(([ownership, count]) => ({ ownership, count }));
-        setLandOwnershipDistribution(landOwnershipData);
-
-        const farmTypeDist = farmers.reduce((acc, farmer) => {
-          const type = farmer.farmType || "Unknown";
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, {});
-        const farmTypeData = Object.entries(farmTypeDist).map(([type, count]) => ({ type, count }));
-        setFarmTypeDistribution(farmTypeData);
-
-        const topFarmers = farmers
-          .map(farmer => ({
-            name: farmer.name,
-            production: Number(farmer.hectares) || 0,
-          }))
-          .sort((a, b) => b.production - a.production)
-          .slice(0, 5);
-        setTopProducingFarmers(topFarmers);
-
-        setVisibleSeries({
-          farmerCropTrends: cropTrendsData.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
-          highDemandVeggies: demandData.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
-          seasonDistribution: seasonData.reduce((acc, item) => ({ ...acc, [item.season]: true }), {}),
-          landOwnershipDistribution: landOwnershipData.reduce((acc, item) => ({ ...acc, [item.ownership]: true }), {}),
-          farmTypeDistribution: farmTypeData.reduce((acc, item) => ({ ...acc, [item.type]: true }), {}),
-          topProducingFarmers: topFarmers.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
-          productionByBarangay: prodData.reduce((acc, item) => ({ ...acc, [item.name]: true }), {}),
-        });
-
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching farmers data:", error);
-        setError("Failed to load farmers data: " + error.message);
-        setLoading(false);
-      }
-    );
-
-    const unsubscribeVegetables = onSnapshot(
-      collection(db, "vegetables_list"),
-      (snapshot) => {
-        setTotalVegetables(snapshot.size);
-      },
-      (error) => {
-        console.error("Error fetching vegetables data:", error);
-      }
-    );
-
-    return () => {
-      unsubscribeFarmers();
-      unsubscribeVegetables();
-    };
+    fetchReportData();
   }, []);
 
-  const handleLegendClick = (chartKey, dataKey) => {
-    setVisibleSeries(prev => ({
-      ...prev,
-      [chartKey]: {
-        ...prev[chartKey],
-        [dataKey]: !prev[chartKey][dataKey],
-      },
-    }));
+  useEffect(() => {
+    if (farmers.length > 0) {
+      applyFilters();
+    }
+  }, [dateRange, selectedBarangay, selectedCrop, farmers]);
+
+  const fetchReportData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch farmers
+      const farmersSnapshot = await getDocs(collection(db, "farmers"));
+      const farmersData = farmersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        name: doc.data().fullName || `${doc.data().firstName || ''} ${doc.data().lastName || ''}`,
+        mainCrop: doc.data().mainCrops?.crop1?.name || "N/A",
+        hectares: Number(doc.data().hectares) || 0,
+        timestamp: doc.data().timestamp || doc.data().createdAt
+      }));
+      setFarmers(farmersData);
+
+      // Fetch vegetables
+      const vegetablesSnapshot = await getDocs(collection(db, "vegetables_list"));
+      const vegetablesData = vegetablesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setVegetables(vegetablesData);
+
+      // Extract unique barangays and crops
+      const uniqueBarangays = [...new Set(farmersData.map(f => f.farmBarangay).filter(Boolean))];
+      const uniqueCrops = [...new Set(farmersData.map(f => f.mainCrop).filter(Boolean))];
+      setBarangays(uniqueBarangays.sort());
+      setCrops(uniqueCrops.sort());
+
+      // Calculate initial analytics
+      calculateAnalytics(farmersData);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching report data:", error);
+      setLoading(false);
+    }
   };
 
-  const handleBarClick = (data, chartKey) => {
-    alert(`Selected ${chartKey}: ${data.name} with value ${data.count || data.production}`);
+  const applyFilters = () => {
+    let filteredFarmers = [...farmers];
+
+    // Filter by barangay
+    if (selectedBarangay !== "all") {
+      filteredFarmers = filteredFarmers.filter(f => f.farmBarangay === selectedBarangay);
+    }
+
+    // Filter by crop
+    if (selectedCrop !== "all") {
+      filteredFarmers = filteredFarmers.filter(f => f.mainCrop === selectedCrop);
+    }
+
+    // Filter by date range
+    if (dateRange !== "all") {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (dateRange) {
+        case "today":
+          filterDate.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case "month":
+          filterDate.setMonth(now.getMonth() - 1);
+          break;
+        case "year":
+          filterDate.setFullYear(now.getFullYear() - 1);
+          break;
+      }
+
+      filteredFarmers = filteredFarmers.filter(f => {
+        if (!f.timestamp) return true;
+        const farmDate = f.timestamp.toDate ? f.timestamp.toDate() : new Date(f.timestamp);
+        return farmDate >= filterDate;
+      });
+    }
+
+    calculateAnalytics(filteredFarmers);
   };
 
-  const handlePieClick = (data, chartKey) => {
-    alert(`Selected ${chartKey}: ${data.season || data.ownership || data.type || data.name} with ${data.count || data.value}`);
+  const calculateAnalytics = (data) => {
+    // Summary Statistics
+    const totalHectares = data.reduce((sum, f) => sum + f.hectares, 0);
+    const avgFarmSize = data.length > 0 ? totalHectares / data.length : 0;
+    
+    setSummaryStats({
+      totalFarmers: data.length,
+      totalHectares: totalHectares.toFixed(2),
+      totalVegetables: vegetables.length,
+      activeFarms: data.filter(f => f.status === "active" || !f.status).length,
+      avgFarmSize: avgFarmSize.toFixed(2)
+    });
+
+    // Barangay Analysis
+    const barangayStats = {};
+    data.forEach(farmer => {
+      const barangay = farmer.farmBarangay || "Unknown";
+      if (!barangayStats[barangay]) {
+        barangayStats[barangay] = { count: 0, hectares: 0 };
+      }
+      barangayStats[barangay].count++;
+      barangayStats[barangay].hectares += farmer.hectares;
+    });
+    
+    const barangayArray = Object.entries(barangayStats)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.hectares - a.hectares);
+    setBarangayData(barangayArray);
+
+    // Crop Distribution
+    const cropStats = {};
+    data.forEach(farmer => {
+      if (farmer.mainCrops) {
+        Object.values(farmer.mainCrops).forEach(crop => {
+          if (crop.name) {
+            cropStats[crop.name] = (cropStats[crop.name] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    const cropArray = Object.entries(cropStats)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+    setCropDistribution(cropArray);
+
+    // Seasonal Distribution
+    const seasonStats = {};
+    data.forEach(farmer => {
+      const season = farmer.season || "Not Specified";
+      seasonStats[season] = (seasonStats[season] || 0) + 1;
+    });
+    setSeasonalData(Object.entries(seasonStats).map(([season, count]) => ({ season, count })));
+
+    // Land Ownership
+    const ownershipStats = {};
+    data.forEach(farmer => {
+      const ownership = farmer.landOwnership || "Not Specified";
+      ownershipStats[ownership] = (ownershipStats[ownership] || 0) + 1;
+    });
+    setLandOwnershipData(Object.entries(ownershipStats).map(([ownership, count]) => ({ ownership, count })));
+
+    // Farm Type
+    const farmTypeStats = {};
+    data.forEach(farmer => {
+      const type = farmer.farmType || "Not Specified";
+      farmTypeStats[type] = (farmTypeStats[type] || 0) + 1;
+    });
+    setFarmTypeData(Object.entries(farmTypeStats).map(([type, count]) => ({ type, count })));
+
+    // Production Trends (by crop)
+    const productionStats = {};
+    data.forEach(farmer => {
+      const crop = farmer.mainCrop || "Unknown";
+      if (!productionStats[crop]) {
+        productionStats[crop] = 0;
+      }
+      productionStats[crop] += farmer.hectares;
+    });
+    
+    const productionArray = Object.entries(productionStats)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+    setProductionTrends(productionArray);
+
+    // Top Producers
+    const topFarmers = data
+      .map(f => ({ name: f.name, production: f.hectares, barangay: f.farmBarangay }))
+      .sort((a, b) => b.production - a.production)
+      .slice(0, 10);
+    setTopProducers(topFarmers);
   };
 
-  const downloadCSV = (data, filename) => {
-    const csv = [
-      Object.keys(data[0]).join(","),
-      ...data.map(row => Object.values(row).join(","))
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handlePrint = () => {
+  const handleExportPDF = () => {
     window.print();
   };
 
- const handleDownloadPDF = async () => {
-  try {
-    if (reportRef.current) {
-      const canvas = await html2canvas(reportRef.current, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save('agri_reports.pdf');
-    } else {
-      console.error("Report reference is not available");
-      alert("Failed to generate PDF: Report content not found");
-    }
-  } catch (error) {
-    console.error("Error generating PDF:", error);
-    alert("Failed to generate PDF: " + error.message);
+  const handleExportCSV = () => {
+    const headers = ["Name", "Barangay", "Hectares", "Main Crop", "Farm Type", "Land Ownership"];
+    const csvData = farmers.map(f => [
+      f.name,
+      f.farmBarangay || "N/A",
+      f.hectares,
+      f.mainCrop,
+      f.farmType || "N/A",
+      f.landOwnership || "N/A"
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agricultural-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+
+  // Chart Options
+  const barangayChartOptions = {
+    chart: { type: 'bar', toolbar: { show: true } },
+    colors: COLORS,
+    plotOptions: { bar: { borderRadius: 8, distributed: true, horizontal: false } },
+    dataLabels: { enabled: false },
+    xaxis: { 
+      categories: barangayData.map(b => b.name),
+      labels: { rotate: -45, style: { fontSize: '11px' } }
+    },
+    yaxis: { title: { text: 'Total Hectares' } },
+    title: { text: 'Production by Barangay', align: 'left', style: { fontSize: '16px', fontWeight: 'bold' } },
+    legend: { show: false }
+  };
+
+  const cropPieOptions = {
+    chart: { type: 'donut' },
+    labels: cropDistribution.map(c => c.name),
+    colors: COLORS,
+    title: { text: 'Crop Distribution', align: 'left', style: { fontSize: '16px', fontWeight: 'bold' } },
+    legend: { position: 'bottom' },
+    responsive: [{
+      breakpoint: 480,
+      options: { legend: { position: 'bottom' } }
+    }]
+  };
+
+  const productionLineOptions = {
+    chart: { type: 'line', toolbar: { show: true } },
+    colors: ['#10b981'],
+    stroke: { curve: 'smooth', width: 3 },
+    markers: { size: 5 },
+    xaxis: { categories: productionTrends.map(p => p.name) },
+    yaxis: { title: { text: 'Hectares' } },
+    title: { text: 'Production Trends by Crop', align: 'left', style: { fontSize: '16px', fontWeight: 'bold' } }
+  };
+
+  const seasonChartOptions = {
+    chart: { type: 'pie' },
+    labels: seasonalData.map(s => s.season),
+    colors: COLORS,
+    title: { text: 'Seasonal Distribution', align: 'left', style: { fontSize: '16px', fontWeight: 'bold' } },
+    legend: { position: 'bottom' }
+  };
+
+  const tabs = [
+    { id: "overview", label: "Overview", icon: FaChartBar },
+    { id: "production", label: "Production", icon: FaChartLine },
+    { id: "farmers", label: "Farmers", icon: FaUsers },
+    { id: "detailed", label: "Detailed Data", icon: FaTable }
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <FaSpinner className="text-6xl text-green-600 animate-spin mx-auto mb-4" />
+          <p className="text-green-800 font-semibold text-lg">Generating reports...</p>
+        </div>
+      </div>
+    );
   }
-};
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-green-900 text-center mb-8 flex items-center justify-center">
-          <FaChartBar className="mr-2 text-green-600" /> Reports
-        </h1>
-
-        <div className="flex justify-end space-x-4 mb-6">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-          >
-            <FaPrint /> Print Report
-          </button>
-          <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-          >
-            <FaFilePdf /> Download PDF
-          </button>
-        </div>
-
-        {loading && (
-          <div className="flex justify-center items-center h-64">
-            <FaSpinner className="text-5xl text-green-600 animate-spin" />
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 border border-white/50">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl shadow-lg">
+                <FaFileAlt className="text-white text-3xl" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  Agricultural Reports
+                </h1>
+                <p className="text-gray-600 text-sm mt-1">Comprehensive analytics and insights</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-lg"
+              >
+                <FaDownload />
+                <span className="hidden md:inline">Export CSV</span>
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg"
+              >
+                <FaPrint />
+                <span className="hidden md:inline">Print</span>
+              </button>
+            </div>
           </div>
-        )}
-        {error && (
-          <div className="bg-red-100 p-4 rounded-xl text-red-700 text-center font-medium">
-            {error}
-          </div>
-        )}
 
-        {!loading && !error && (
-          <div ref={reportRef} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 print:grid-cols-4">
-              <OverviewCard title="Total Farmers" value={totalFarmers} icon={<FaChartBar />} />
-              <OverviewCard title="Vegetable Types" value={totalVegetables} icon={<FaLeaf />} />
-              <OverviewCard title="Total Production" value={`${totalProduction} ha`} icon={<FaTractor />} />
-              <OverviewCard title="Avg Farm Size" value={`${averageFarmSize} ha`} icon={<FaChartBar />} />
+          {/* Filters */}
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <FaCalendar className="inline mr-2" />
+                Date Range
+              </label>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last Month</option>
+                <option value="year">Last Year</option>
+              </select>
             </div>
 
-            <ReportSection
-              title="Recent Activities"
-              description="Latest farmer activities (Real-time)"
-              data={recentActivities}
-              download={() => downloadCSV(recentActivities.map(act => ({ name: act.name, timestamp: act.timestamp })), "recent_activities.csv")}
-            >
-              <div className="space-y-2 h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-green-200 scrollbar-track-gray-100">
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm hover:bg-green-50 transition-all duration-200"
-                  >
-                    <div className="flex items-center space-x-2 flex-1 truncate">
-                      <FaTractor className="text-green-600" />
-                      <span className="truncate font-medium text-gray-800">{activity.name}</span>
-                    </div>
-                    <span className="text-gray-500 ml-2 whitespace-nowrap">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </span>
-                  </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <FaMapMarkedAlt className="inline mr-2" />
+                Barangay
+              </label>
+              <select
+                value={selectedBarangay}
+                onChange={(e) => setSelectedBarangay(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="all">All Barangays</option>
+                {barangays.map(b => (
+                  <option key={b} value={b}>{b}</option>
                 ))}
-              </div>
-            </ReportSection>
+              </select>
+            </div>
 
-            <ReportSection
-              title="Farmer Crop Trends 🌾"
-              description="Number of farmers producing each vegetable (Real-time)"
-              data={farmerCropTrends}
-              download={() => downloadCSV(farmerCropTrends, "farmer_crop_trends.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart 
-                  data={farmerCropTrends.filter(item => visibleSeries.farmerCropTrends[item.name])}
-                  onClick={(data) => data && handleBarClick(data.activePayload[0].payload, "Crop")}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} />
-                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} tick={{ fontSize: 12, fill: "#1f2937" }} />
-                  <YAxis tick={{ fontSize: 12, fill: "#1f2937" }} label={{ value: "Number of Farmers", angle: -90, position: "insideLeft", offset: -10, fill: "#1f2937" }} />
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} farmers`, "Count"]} 
-                      labelFormatter={(label) => `Vegetable: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("farmerCropTrends", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.farmerCropTrends[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    onClick={(data) => handleBarClick(data, "Crop")} 
-                    radius={[8, 8, 0, 0]}
-                    animationDuration={1000}
-                  >
-                    {farmerCropTrends.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Vegetable Production Trends 📈"
-              description="Most produced vegetables based on farmer data (Real-time)"
-              data={highDemandVeggies}
-              download={() => downloadCSV(highDemandVeggies, "vegetable_production_trends.csv")}
-            >
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart 
-                  data={highDemandVeggies.filter(item => visibleSeries.highDemandVeggies[item.name])}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} />
-                  <XAxis dataKey="name" angle={0} textAnchor="middle" height={50} tick={{ fontSize: 12, fill: "#1f2937" }} padding={{ left: 20, right: 20 }} />
-                  <YAxis tick={{ fontSize: 12, fill: "#1f2937" }} label={{ value: "Quantity (ha)", angle: -90, position: "insideLeft", offset: -10, fill: "#1f2937" }} />
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} ha`, "Quantity"]} 
-                      labelFormatter={(label) => `Vegetable: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("highDemandVeggies", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.highDemandVeggies[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#16a34a" 
-                    strokeWidth={4} 
-                    dot={{ fill: "#16a34a", r: 6 }} 
-                    activeDot={{ r: 8, fill: "#16a34a", stroke: "#fff", strokeWidth: 2 }} 
-                    animationDuration={1000}
-                  />
-                  <Brush dataKey="name" height={30} stroke="#16a34a" fill="#f3f4f6" />
-                </LineChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Season Distribution 📊"
-              description="Number of farmers by season (Real-time)"
-              data={seasonDistribution}
-              download={() => downloadCSV(seasonDistribution.map(item => ({ season: item.season, count: item.count })), "season_distribution.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={seasonDistribution.filter(item => visibleSeries.seasonDistribution[item.season])}
-                    dataKey="count"
-                    nameKey="season"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ season, count }) => `${season}: ${count}`}
-                    labelLine={{ stroke: "#1f2937", strokeWidth: 1 }}
-                    onClick={(data) => handlePieClick(data, "Season")}
-                    animationDuration={1000}
-                  >
-                    {seasonDistribution.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={COLORS[index % COLORS.length]} 
-                        style={{ cursor: "pointer", opacity: visibleSeries.seasonDistribution[entry.season] ? 1 : 0.3 }}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} farmers`, "Count"]} 
-                      labelFormatter={(label) => `Season: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("seasonDistribution", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.seasonDistribution[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Land Ownership Distribution 🏡"
-              description="Distribution of farmers by land ownership type (Real-time)"
-              data={landOwnershipDistribution}
-              download={() => downloadCSV(landOwnershipDistribution.map(item => ({ ownership: item.ownership, count: item.count })), "land_ownership_distribution.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={landOwnershipDistribution.filter(item => visibleSeries.landOwnershipDistribution[item.ownership])}
-                    dataKey="count"
-                    nameKey="ownership"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ ownership, count }) => `${ownership}: ${count}`}
-                    labelLine={{ stroke: "#1f2937", strokeWidth: 1 }}
-                    onClick={(data) => handlePieClick(data, "Land Ownership")}
-                    animationDuration={1000}
-                  >
-                    {landOwnershipDistribution.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={COLORS[index % COLORS.length]} 
-                        style={{ cursor: "pointer", opacity: visibleSeries.landOwnershipDistribution[entry.ownership] ? 1 : 0.3 }}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} farmers`, "Count"]} 
-                      labelFormatter={(label) => `Ownership: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("landOwnershipDistribution", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.landOwnershipDistribution[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Farm Type Distribution 🌾"
-              description="Distribution of farmers by farm type (Real-time)"
-              data={farmTypeDistribution}
-              download={() => downloadCSV(farmTypeDistribution.map(item => ({ type: item.type, count: item.count })), "farm_type_distribution.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={farmTypeDistribution.filter(item => visibleSeries.farmTypeDistribution[item.type])}
-                    dataKey="count"
-                    nameKey="type"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ type, count }) => `${type}: ${count}`}
-                    labelLine={{ stroke: "#1f2937", strokeWidth: 1 }}
-                    onClick={(data) => handlePieClick(data, "Farm Type")}
-                    animationDuration={1000}
-                  >
-                    {farmTypeDistribution.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={COLORS[index % COLORS.length]} 
-                        style={{ cursor: "pointer", opacity: visibleSeries.farmTypeDistribution[entry.type] ? 1 : 0.3 }}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} farmers`, "Count"]} 
-                      labelFormatter={(label) => `Farm Type: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("farmTypeDistribution", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.farmTypeDistribution[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Top Producing Farmers 🏆"
-              description="Farmers ranked by production area (Real-time)"
-              data={topProducingFarmers}
-              download={() => downloadCSV(topProducingFarmers, "top_producing_farmers.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart 
-                  data={topProducingFarmers.filter(item => visibleSeries.topProducingFarmers[item.name])}
-                  onClick={(data) => data && handleBarClick(data.activePayload[0].payload, "Farmer")}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} />
-                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} tick={{ fontSize: 12, fill: "#1f2937" }} />
-                  <YAxis tick={{ fontSize: 12, fill: "#1f2937" }} label={{ value: "Production (ha)", angle: -90, position: "insideLeft", offset: -10, fill: "#1f2937" }} />
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} ha`, "Production"]} 
-                      labelFormatter={(label) => `Farmer: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("topProducingFarmers", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.topProducingFarmers[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                  <Bar 
-                    dataKey="production" 
-                    onClick={(data) => handleBarClick(data, "Farmer")} 
-                    radius={[8, 8, 0, 0]}
-                    animationDuration={1000}
-                  >
-                    {topProducingFarmers.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection
-              title="Production by Barangay 📊"
-              description="Total production by barangay in ha (Real-time)"
-              data={productionByBarangay}
-              download={() => downloadCSV(productionByBarangay, "production_by_barangay.csv")}
-            >
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={productionByBarangay.filter(item => visibleSeries.productionByBarangay[item.name])}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    labelLine={{ stroke: "#1f2937", strokeWidth: 1 }}
-                    onClick={(data) => handlePieClick(data, "Barangay")}
-                    animationDuration={1000}
-                  >
-                    {productionByBarangay.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={COLORS[index % COLORS.length]} 
-                        style={{ cursor: "pointer", opacity: visibleSeries.productionByBarangay[entry.name] ? 1 : 0.3 }}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    content={<CustomTooltip 
-                      formatter={(value) => [`${value} ha`, "Production"]} 
-                      labelFormatter={(label) => `Barangay: ${label}`} 
-                    />}
-                  />
-                  <Legend 
-                    onClick={(e) => handleLegendClick("productionByBarangay", e.dataKey)} 
-                    formatter={(value) => <span className={visibleSeries.productionByBarangay[value] ? "text-gray-800 font-medium" : "text-gray-400"}>{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </ReportSection>
-
-            <ReportSection title="Overall Analysis" description="Comprehensive summary of agricultural activities">
-              <div className="space-y-3 text-sm text-gray-700">
-                <p>
-                  This report provides a comprehensive overview of agricultural activities in Canlaon City. Currently, there are <strong>{totalFarmers}</strong> registered farmers cultivating <strong>{totalVegetables}</strong> distinct vegetable types, contributing to a vibrant local food ecosystem.
-                </p>
-                <p>
-                  The system tracks farmer production trends, with {highDemandVeggies.length > 0 ? highDemandVeggies[0].name : "no data yet"} leading at {highDemandVeggies.length > 0 ? highDemandVeggies[0].value : 0} ha.
-                </p>
-                <p>
-                  Farmer production trends show {farmerCropTrends.length > 0 ? farmerCropTrends[0].name : "no data yet"} as the most cultivated crop, with <strong>{farmerCropTrends.length > 0 ? farmerCropTrends[0].count : 0}</strong> farmers involved. Significant activity in barangays like {productionByBarangay.length > 0 ? productionByBarangay[0].name : "Unknown"}.
-                </p>
-                <p>
-                  Land ownership data indicates that {landOwnershipDistribution.length > 0 ? landOwnershipDistribution[0].ownership : "no data"} is the most common type, with {landOwnershipDistribution.length > 0 ? landOwnershipDistribution[0].count : 0} farmers. Farm type distribution shows {farmTypeDistribution.length > 0 ? farmTypeDistribution[0].type : "no data"} as the predominant type, with {farmTypeDistribution.length > 0 ? farmTypeDistribution[0].count : 0} farmers.
-                </p>
-                <p>
-                  Recent activities indicate ongoing engagement, with the latest being {recentActivities.length > 0 ? recentActivities[0].name : "none recorded"} at {recentActivities.length > 0 ? new Date(recentActivities[0].timestamp).toLocaleString() : "N/A"}. This data suggests a dynamic agricultural economy with opportunities for targeted growth in high-demand crops.
-                </p>
-              </div>
-            </ReportSection>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <FaSeedling className="inline mr-2" />
+                Crop Type
+              </label>
+              <select
+                value={selectedCrop}
+                onChange={(e) => setSelectedCrop(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="all">All Crops</option>
+                {crops.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <StatCard title="Total Farmers" value={summaryStats.totalFarmers} icon="👨‍🌾" color="from-green-400 to-emerald-500" />
+          <StatCard title="Total Hectares" value={summaryStats.totalHectares} icon="📏" color="from-blue-400 to-cyan-500" />
+          <StatCard title="Crop Types" value={summaryStats.totalVegetables} icon="🥬" color="from-yellow-400 to-orange-500" />
+          <StatCard title="Active Farms" value={summaryStats.activeFarms} icon="🌾" color="from-purple-400 to-pink-500" />
+          <StatCard title="Avg Farm Size" value={`${summaryStats.avgFarmSize} ha`} icon="📊" color="from-teal-400 to-cyan-500" />
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 overflow-hidden">
+          <div className="border-b border-gray-200">
+            <div className="flex overflow-x-auto">
+              {tabs.map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-6 py-4 font-medium transition-all whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
+                        : 'text-gray-600 hover:text-green-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-6">
+            {/* Overview Tab */}
+            {activeTab === "overview" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <ReactApexChart
+                      options={barangayChartOptions}
+                      series={[{ data: barangayData.map(b => b.hectares) }]}
+                      type="bar"
+                      height={350}
+                    />
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <ReactApexChart
+                      options={cropPieOptions}
+                      series={cropDistribution.map(c => c.count)}
+                      type="donut"
+                      height={350}
+                    />
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <ReactApexChart
+                      options={seasonChartOptions}
+                      series={seasonalData.map(s => s.count)}
+                      type="pie"
+                      height={350}
+                    />
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Key Insights</h3>
+                    <div className="space-y-4">
+                      {barangayData.length > 0 && (
+                        <div className="p-4 bg-green-50 rounded-lg">
+                          <p className="text-sm text-gray-700">
+                            <strong className="text-green-700">Top Producing Barangay:</strong> {barangayData[0].name} with {barangayData[0].hectares.toFixed(2)} hectares
+                          </p>
+                        </div>
+                      )}
+                      {cropDistribution.length > 0 && (
+                        <div className="p-4 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-gray-700">
+                            <strong className="text-blue-700">Most Cultivated Crop:</strong> {cropDistribution[0].name} ({cropDistribution[0].count} farmers)
+                          </p>
+                        </div>
+                      )}
+                      <div className="p-4 bg-purple-50 rounded-lg">
+                        <p className="text-sm text-gray-700">
+                          <strong className="text-purple-700">Average Farm Size:</strong> {summaryStats.avgFarmSize} hectares per farmer
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Production Tab */}
+            {activeTab === "production" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <ReactApexChart
+                    options={productionLineOptions}
+                    series={[{ name: 'Production (ha)', data: productionTrends.map(p => p.value) }]}
+                    type="line"
+                    height={350}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <FaTractor className="text-green-600" />
+                      Top 10 Producers
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 text-sm font-semibold text-gray-700">Rank</th>
+                            <th className="text-left py-2 text-sm font-semibold text-gray-700">Name</th>
+                            <th className="text-left py-2 text-sm font-semibold text-gray-700">Barangay</th>
+                            <th className="text-right py-2 text-sm font-semibold text-gray-700">Hectares</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topProducers.map((farmer, idx) => (
+                            <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 text-sm">
+                                <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-700 rounded-full font-semibold text-xs">
+                                  {idx + 1}
+                                </span>
+                              </td>
+                              <td className="py-3 text-sm text-gray-900">{farmer.name}</td>
+                              <td className="py-3 text-sm text-gray-600">{farmer.barangay || 'N/A'}</td>
+                              <td className="py-3 text-sm text-right font-semibold text-gray-900">{farmer.production.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <FaChartPie className="text-blue-600" />
+                      Distribution Analysis
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Land Ownership</h4>
+                        {landOwnershipData.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-gray-600">{item.ownership}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-green-600 h-2 rounded-full"
+                                  style={{ width: `${(item.count / summaryStats.totalFarmers) * 100}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900 w-8">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="font-semibold text-gray-700 mb-2">Farm Type</h4>
+                        {farmTypeData.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-gray-600">{item.type}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full"
+                                  style={{ width: `${(item.count / summaryStats.totalFarmers) * 100}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900 w-8">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Farmers Tab */}
+            {activeTab === "farmers" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200">
+                    <h4 className="text-sm font-medium text-gray-600 mb-2">Registered Farmers</h4>
+                    <p className="text-3xl font-bold text-green-700">{summaryStats.totalFarmers}</p>
+                    <p className="text-xs text-gray-500 mt-2">Total count</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border-2 border-blue-200">
+                    <h4 className="text-sm font-medium text-gray-600 mb-2">Active Farms</h4>
+                    <p className="text-3xl font-bold text-blue-700">{summaryStats.activeFarms}</p>
+                    <p className="text-xs text-gray-500 mt-2">Currently farming</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border-2 border-purple-200">
+                    <h4 className="text-sm font-medium text-gray-600 mb-2">Barangays Covered</h4>
+                    <p className="text-3xl font-bold text-purple-700">{barangays.length}</p>
+                    <p className="text-xs text-gray-500 mt-2">Geographic reach</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">Farmers by Barangay</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {barangayData.map((barangay, idx) => (
+                      <div key={idx} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-gray-900">{barangay.name}</h4>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                            {barangay.count} farmers
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <FaMapMarkedAlt className="text-gray-400" />
+                          <span className="text-sm text-gray-600">{barangay.hectares.toFixed(2)} ha</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Detailed Data Tab */}
+            {activeTab === "detailed" && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="p-4 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                      <FaTable className="text-gray-600" />
+                      Complete Farmer Database
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Showing {farmers.length} farmers
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            #
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Farmer Name
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Barangay
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Main Crop
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Hectares
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Farm Type
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Land Ownership
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Season
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-100">
+                        {farmers.map((farmer, idx) => (
+                          <tr key={farmer.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {idx + 1}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                  <FaUsers className="text-green-600 text-xs" />
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">{farmer.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {farmer.farmBarangay || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                                <FaLeaf className="text-xs" />
+                                {farmer.mainCrop}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                              {farmer.hectares.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {farmer.farmType || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {farmer.landOwnership || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {farmer.season || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {farmers.length === 0 && (
+                    <div className="p-12 text-center">
+                      <FaFilter className="text-gray-300 text-5xl mx-auto mb-4" />
+                      <p className="text-gray-500 font-medium">No farmers found matching the filters</p>
+                      <p className="text-sm text-gray-400 mt-2">Try adjusting your filter criteria</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary Cards Below Table */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h4 className="text-sm font-medium text-gray-600 mb-4">Crop Variety</h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {cropDistribution.slice(0, 10).map((crop, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700">{crop.name}</span>
+                          <span className="text-sm font-semibold text-green-600">{crop.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h4 className="text-sm font-medium text-gray-600 mb-4">Barangay Coverage</h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {barangayData.slice(0, 10).map((barangay, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-700">{barangay.name}</span>
+                          <span className="text-sm font-semibold text-blue-600">{barangay.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h4 className="text-sm font-medium text-gray-600 mb-4">Production Summary</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <span className="text-sm text-gray-700">Total Production</span>
+                        <span className="text-sm font-bold text-green-700">{summaryStats.totalHectares} ha</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <span className="text-sm text-gray-700">Average per Farm</span>
+                        <span className="text-sm font-bold text-blue-700">{summaryStats.avgFarmSize} ha</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                        <span className="text-sm text-gray-700">Active Farms</span>
+                        <span className="text-sm font-bold text-purple-700">{summaryStats.activeFarms}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Additional Analytics Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Monthly/Seasonal Breakdown */}
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FaCalendar className="text-green-600" />
+              Seasonal Analysis
+            </h3>
+            <div className="space-y-4">
+              {seasonalData.map((season, idx) => {
+                const percentage = ((season.count / summaryStats.totalFarmers) * 100).toFixed(1);
+                return (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">{season.season}</span>
+                      <span className="text-sm font-semibold text-gray-900">{season.count} farmers ({percentage}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500"
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Regional Performance */}
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FaMapMarkedAlt className="text-blue-600" />
+              Regional Performance
+            </h3>
+            <div className="space-y-3">
+              {barangayData.slice(0, 5).map((barangay, idx) => (
+                <div key={idx} className="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="font-bold text-blue-600">{idx + 1}</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{barangay.name}</p>
+                        <p className="text-xs text-gray-500">{barangay.count} farmers</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-green-600">{barangay.hectares.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">hectares</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-blue-400 to-cyan-500 h-2 rounded-full"
+                      style={{ width: `${(barangay.hectares / Math.max(...barangayData.map(b => b.hectares))) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Executive Summary */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FaFileAlt className="text-purple-600" />
+            Executive Summary
+          </h3>
+          <div className="prose prose-sm max-w-none">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500">
+                  <h4 className="font-semibold text-green-900 mb-2">Agricultural Overview</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Currently monitoring <strong>{summaryStats.totalFarmers}</strong> farmers across <strong>{barangays.length}</strong> barangays, 
+                    cultivating a total of <strong>{summaryStats.totalHectares} hectares</strong> with <strong>{summaryStats.totalVegetables}</strong> different 
+                    crop varieties. The average farm size is <strong>{summaryStats.avgFarmSize} hectares</strong>.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border-l-4 border-blue-500">
+                  <h4 className="font-semibold text-blue-900 mb-2">Top Performers</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {barangayData.length > 0 && (
+                      <>
+                        <strong>{barangayData[0].name}</strong> leads in production with <strong>{barangayData[0].hectares.toFixed(2)} hectares</strong>, 
+                        followed by {barangayData.length > 1 && <><strong>{barangayData[1].name}</strong> ({barangayData[1].hectares.toFixed(2)} ha)</>}.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border-l-4 border-yellow-500">
+                  <h4 className="font-semibold text-yellow-900 mb-2">Crop Diversity</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {cropDistribution.length > 0 && (
+                      <>
+                        <strong>{cropDistribution[0].name}</strong> is the most popular crop with <strong>{cropDistribution[0].count}</strong> farmers, 
+                        representing strong market demand and farmer preference in the region.
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500">
+                  <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
+                  <ul className="text-sm text-gray-700 leading-relaxed list-disc list-inside space-y-1">
+                    <li>Focus support on high-performing barangays</li>
+                    <li>Encourage crop diversification in monoculture areas</li>
+                    <li>Provide training for farmers below average production</li>
+                    <li>Monitor seasonal trends for better planning</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .print-area, .print-area * {
+            visibility: visible;
+          }
+          .print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          button {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };
 
-const ReportSection = ({ title, description, children, data, download }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300 page-break-before">
-    <div className="flex justify-between items-center mb-4">
-      <div>
-        <h2 className="text-xl font-semibold text-green-900 flex items-center">
-          <FaLeaf className="mr-2 text-green-600" /> {title}
-        </h2>
-        <p className="text-sm text-gray-500">{description}</p>
-      </div>
-      {data && data.length > 0 && (
-        <button
-          onClick={download}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-        >
-          <FaDownload /> Download CSV
-        </button>
-      )}
-    </div>
-    {children}
-  </div>
-);
-
-const OverviewCard = ({ title, value, icon }) => (
-  <div className={`p-6 rounded-xl shadow-lg bg-green-100 hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1`}>
+const StatCard = ({ title, value, icon, color }) => (
+  <div className={`bg-gradient-to-br ${color} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}>
     <div className="flex items-center justify-between">
       <div>
-        <h3 className="text-sm font-medium text-gray-600">{title}</h3>
-        <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
+        <p className="text-white/80 text-sm font-medium mb-1">{title}</p>
+        <p className="text-white text-2xl font-bold">{value}</p>
       </div>
-      <div className="text-3xl text-gray-600">{icon}</div>
+      <div className="text-4xl opacity-80">{icon}</div>
     </div>
   </div>
 );

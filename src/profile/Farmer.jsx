@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../config/firebaseConfig";
 import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc } from "firebase/firestore";
-import { FaSearch, FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaEdit, FaTrash, FaList, FaTh, FaMapMarkerAlt as FaMapIcon, FaPlus, FaTimes, FaCalendarAlt, FaInfoCircle } from "react-icons/fa";
+import { FaSearch, FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaEdit, FaTrash, FaList, FaTh, FaPlus, FaTimes, FaCalendarAlt, FaInfoCircle, FaSave, FaBan, FaFilter, FaUserCircle, FaLocationArrow, FaCrop } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import canlaonLocations from "../data/canlaonLocations";
 import axios from 'axios';
@@ -10,23 +10,29 @@ const Farmer = () => {
   const [farmers, setFarmers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
- const [editingFarmer, setEditingFarmer] = useState(null);
+  const [editingFarmer, setEditingFarmer] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [viewMode, setViewMode] = useState("card");
   const [selectedAddressBarangay, setSelectedAddressBarangay] = useState("");
   const [selectedFarmBarangay, setSelectedFarmBarangay] = useState("");
   const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "", harvestDate: "" });
   const [vegetables, setVegetables] = useState([]);
-  const [farmerVegetables, setFarmerVegetables] = useState([]); // Current editing crops
-  const [originalVegetables, setOriginalVegetables] = useState([]); // Snapshot for comparison
-  const [originalData, setOriginalData] = useState({}); // For other fields comparison
-  const [updateHighlights, setUpdateHighlights] = useState({}); // Track changes for highlighting
-  const [isGeocoding, setIsGeocoding] = useState(false); // For async geocoding
+  const [farmerVegetables, setFarmerVegetables] = useState([]);
+  const [originalVegetables, setOriginalVegetables] = useState([]);
+  const [originalData, setOriginalData] = useState({});
+  const [updateHighlights, setUpdateHighlights] = useState({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchFarmers = async () => {
+    const fetchData = async () => {
       try {
-        const farmerSnapshot = await getDocs(collection(db, "farmers"));
+        const [farmerSnapshot, veggieSnapshot] = await Promise.all([
+          getDocs(collection(db, "farmers")),
+          getDocs(collection(db, "vegetables_list"))
+        ]);
+
+        // Process farmers data
         const farmerList = await Promise.all(
           farmerSnapshot.docs.map(async (doc) => {
             const farmerData = { id: doc.id, ...doc.data() };
@@ -35,40 +41,39 @@ const Farmer = () => {
               where("farmerId", "==", farmerData.id)
             );
             const vegetableSnapshot = await getDocs(vegetableQuery);
-            const farmerCrops = vegetableSnapshot.docs.map((vegDoc) => ({ id: vegDoc.id, ...vegDoc.data() }));
+            const farmerCrops = vegetableSnapshot.docs.map((vegDoc) => ({
+              id: vegDoc.id,
+              ...vegDoc.data()
+            }));
             return { ...farmerData, mainCrops: farmerCrops };
           })
         );
-        setFarmers(farmerList);
-      } catch (error) {
-        console.error("Error fetching farmers:", error);
-      }
-    };
 
-    const fetchVegetables = async () => {
-      try {
-        const veggieSnapshot = await getDocs(collection(db, "vegetables_list"));
+        // Process vegetables list
         const veggieList = veggieSnapshot.docs.map(doc => ({
           id: doc.id,
           name: doc.data().name,
           harvestAfter: doc.data().harvestAfter || 60,
         }));
+
+        setFarmers(farmerList);
         setVegetables(veggieList);
+        setIsLoading(false);
       } catch (error) {
-        console.error("Error fetching vegetables:", error);
+        console.error("Error fetching data:", error);
+        setIsLoading(false);
       }
     };
 
-    fetchFarmers();
-    fetchVegetables();
+    fetchData();
   }, []);
 
   const filteredFarmers = farmers.filter((farmer) =>
-    farmer.fullName.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (locationFilter === "" || farmer.farmLocation.toLowerCase().includes(locationFilter.toLowerCase()))
+    farmer.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+    (locationFilter === "" || farmer.farmLocation?.toLowerCase().includes(locationFilter.toLowerCase()))
   );
 
-  const uniqueLocations = [...new Set(farmers.map(farmer => farmer.farmLocation))].sort();
+  const uniqueLocations = [...new Set(farmers.map(farmer => farmer.farmLocation).filter(Boolean))].sort();
 
   const geocodeAddress = async (address) => {
     try {
@@ -99,7 +104,7 @@ const Farmer = () => {
     setSelectedFarmBarangay(farmBarangay);
 
     const crops = farmer.mainCrops || [];
-    setOriginalVegetables(JSON.parse(JSON.stringify(crops))); // Deep copy for old values
+    setOriginalVegetables(JSON.parse(JSON.stringify(crops)));
     setFarmerVegetables(JSON.parse(JSON.stringify(crops)));
     setOriginalData({
       fullName: farmer.fullName,
@@ -123,7 +128,7 @@ const Farmer = () => {
       coordinates: farmer.coordinates || [10.3860, 123.2220],
       area: farmer.area || [],
     });
-    setUpdateHighlights({}); // Reset highlights
+    setUpdateHighlights({});
   };
 
   const handleEditChange = async (e) => {
@@ -152,17 +157,15 @@ const Farmer = () => {
       setEditForm((prev) => ({ ...prev, farmSitio: "" }));
     }
 
-    // Auto-update coordinates and area on farm location or hectares change
     if (["farmBarangay", "farmSitio", "hectares"].includes(name)) {
       const currentForm = { ...editForm, [name]: updatedValue };
       if (currentForm.farmBarangay && currentForm.farmSitio && currentForm.hectares) {
         const barangayData = canlaonLocations[currentForm.farmBarangay];
-        let coords = [10.3860, 123.2220]; // default
+        let coords = [10.3860, 123.2220];
         if (barangayData) {
           const sitioData = barangayData.sitios.find(s => s.name === currentForm.farmSitio);
           coords = sitioData ? sitioData.coordinates : barangayData.coordinates;
         } else {
-          // Fallback to geocode if not in local data
           const geocoded = await geocodeAddress(`${currentForm.farmSitio}, ${currentForm.farmBarangay}`);
           if (geocoded) coords = geocoded;
         }
@@ -190,7 +193,6 @@ const Farmer = () => {
     if (currentForm.hectares !== originalData.hectares) highlights.hectares = true;
     if (JSON.stringify(currentForm.coordinates) !== JSON.stringify(originalData.coordinates)) highlights.coordinates = true;
 
-    // For crops
     const cropChanges = farmerVegetables.some((crop, index) => {
       const oldCrop = originalVegetables[index];
       if (!oldCrop) return true;
@@ -232,7 +234,7 @@ const Farmer = () => {
   const calculateDuration = (days) => {
     const months = Math.floor(days / 30);
     const remainingDays = days % 30;
-    return months > 0 ? `~${months} month${months > 1 ? "s" : ""}${remainingDays > 0 ? ` and ${remainingDays} day${remainingDays > 1 ? "s" : ""}` : ""}` : `~${days} day${days > 1 ? "s" : ""}`;
+    return months > 0 ? `${months} month${months > 1 ? "s" : ""}${remainingDays > 0 ? ` ${remainingDays} day${remainingDays > 1 ? "s" : ""}` : ""}` : `${days} day${days > 1 ? "s" : ""}`;
   };
 
   const addCrop = () => {
@@ -279,17 +281,12 @@ const Farmer = () => {
     }
     try {
       const farmerRef = doc(db, "farmers", farmerId);
-      const flattenedCrops = farmerVegetables.reduce((acc, crop, index) => {
-        acc[`crop${index + 1}`] = { name: crop.name, plantingDate: crop.plantingDate, harvestDate: crop.harvestDate };
-        return acc;
-      }, {});
-
+      
       const updatedData = {
         fullName: editForm.fullName,
         contact: editForm.contact,
         address: `${editForm.addressBarangay}, ${editForm.addressSitio}, Canlaon City`,
         farmLocation: `${editForm.farmBarangay}, ${editForm.farmSitio}, Canlaon City`,
-        mainCrops: flattenedCrops,
         coordinates: editForm.coordinates,
         area: editForm.area,
         hectares: parseFloat(editForm.hectares) || 0,
@@ -353,375 +350,617 @@ const Farmer = () => {
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h2 className="text-3xl font-bold text-green-700 text-center mb-6 flex items-center justify-center">
-        Farmer Profiles
-      </h2>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading farmer profiles...</p>
+        </div>
+      </div>
+    );
+  }
 
-      {/* Filters, View Mode Toggle, and Back to Map Button */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="flex-1">
-          <div className="flex items-center border rounded-full p-2 bg-gray-100 shadow-sm">
-            <FaSearch className="text-gray-500 mx-2" />
-            <input
-              type="text"
-              placeholder="Search farmers by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-transparent focus:outline-none text-gray-700"
-            />
-          </div>
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center border rounded-full p-2 bg-gray-100 shadow-sm">
-            <FaMapMarkerAlt className="text-gray-500 mx-2" />
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="w-full bg-transparent focus:outline-none text-gray-700"
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                <FaUserCircle className="text-white text-lg" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900">Farmer Profiles</h1>
+                <p className="text-xs text-gray-500">{farmers.length} registered farmers</p>
+              </div>
+            </div>
+            <Link
+              to="/home/maps"
+              className="px-4 py-2 bg-white text-green-600 rounded-lg hover:bg-gray-50 flex items-center border border-green-600 hover:border-green-700 transition-colors"
             >
-              <option value="">Filter by Location</option>
-              {uniqueLocations.map((location) => (
-                <option key={location} value={location}>
-                  {location}
-                </option>
-              ))}
-            </select>
+              <FaLocationArrow className="mr-2" />
+              View Map
+            </Link>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode("card")}
-            className={`p-2 rounded-full ${viewMode === "card" ? "bg-green-600 text-white" : "bg-gray-200"}`}
-            title="Card View"
-          >
-            <FaTh />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2 rounded-full ${viewMode === "list" ? "bg-green-600 text-white" : "bg-gray-200"}`}
-            title="List View"
-          >
-            <FaList />
-          </button>
-          <Link
-            to="/home/maps"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
-          >
-            <FaMapIcon className="mr-2" />
-            Back to Map
-          </Link>
         </div>
       </div>
 
-      {/* Farmer Profiles */}
-      {viewMode === "card" ? (
-        <div className="space-y-8">
-          {filteredFarmers.length > 0 ? (
-            filteredFarmers.map((farmer) => (
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Search and Filter Bar */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <FaSearch className="mr-2 text-gray-400" />
+                Search Farmers
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <FaFilter className="mr-2 text-gray-400" />
+                Filter by Location
+              </label>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">All Locations</option>
+                {uniqueLocations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                View Mode
+              </label>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setViewMode("card")}
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${
+                    viewMode === "card" 
+                      ? "bg-green-600 text-white" 
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <FaTh />
+                  <span>Cards</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${
+                    viewMode === "list" 
+                      ? "bg-green-600 text-white" 
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <FaList />
+                  <span>List</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>
+              Showing {filteredFarmers.length} of {farmers.length} farmers
+            </span>
+            {searchQuery || locationFilter ? (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setLocationFilter("");
+                }}
+                className="text-green-600 hover:text-green-700 flex items-center"
+              >
+                <FaTimes className="mr-1" />
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Farmers Grid/List */}
+        {viewMode === "card" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredFarmers.map((farmer) => (
               <div
                 key={farmer.id}
-                className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 hover:border-green-300 transition-all duration-300"
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
               >
-                <div className="h-32 bg-green-200 relative">
-                  <div className="absolute -bottom-16 left-6">
-                    <div className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center border-4 border-white shadow-md">
-                      <FaUser className="text-gray-600 text-4xl" />
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-16 pb-6 px-6">
-                  <div className="flex justify-between items-start">
-                    <div className="ml-32">
-                      {editingFarmer === farmer.id ? (
-                        <input
-                          type="text"
-                          name="fullName"
-                          value={editForm.fullName}
-                          onChange={handleEditChange}
-                          className={`text-2xl font-bold text-gray-800 border rounded p-2 w-full mb-2 ${updateHighlights.fullName ? "bg-yellow-100" : ""}`}
-                        />
-                      ) : (
-                        <h3 className="text-2xl font-bold text-gray-800">{farmer.fullName}</h3>
-                      )}
-                      <p className="text-gray-500 text-sm">Farmer in Canlaon City</p>
+                {/* Profile Header */}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 border-b border-gray-100">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-14 h-14 bg-green-600 rounded-full flex items-center justify-center">
+                        <FaUser className="text-white text-xl" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-lg">
+                          {editingFarmer === farmer.id ? (
+                            <input
+                              type="text"
+                              name="fullName"
+                              value={editForm.fullName}
+                              onChange={handleEditChange}
+                              className={`text-lg font-semibold border rounded px-2 py-1 w-full ${updateHighlights.fullName ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            />
+                          ) : (
+                            farmer.fullName
+                          )}
+                        </h3>
+                        <p className="text-sm text-gray-600">Farmer ID: {farmer.id.slice(0, 8)}</p>
+                      </div>
                     </div>
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEdit(farmer)}
-                        className="text-blue-500 hover:text-blue-700 p-2 rounded-full bg-blue-50"
-                        title="Edit Profile"
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Edit"
                       >
                         <FaEdit />
                       </button>
                       <button
                         onClick={() => handleDelete(farmer.id)}
-                        className="text-red-500 hover:text-red-700 p-2 rounded-full bg-red-50"
-                        title="Delete Profile"
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
                       >
                         <FaTrash />
                       </button>
                     </div>
                   </div>
+                </div>
 
-                  <hr className="my-4 border-gray-200" />
+                {/* Farmer Details */}
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {/* Contact */}
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <FaPhone className="text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Contact</p>
+                        {editingFarmer === farmer.id ? (
+                          <input
+                            type="text"
+                            name="contact"
+                            value={editForm.contact}
+                            onChange={handleEditChange}
+                            className={`w-full border rounded px-3 py-1 ${updateHighlights.contact ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            placeholder="09123456789"
+                          />
+                        ) : (
+                          <p className="text-gray-900">{farmer.contact}</p>
+                        )}
+                      </div>
+                    </div>
 
-                  {editingFarmer === farmer.id ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center">
-                        <FaPhone className="text-green-700 mr-3" />
-                        <input
-                          type="text"
-                          name="contact"
-                          value={editForm.contact}
-                          onChange={handleEditChange}
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.contact ? "bg-yellow-100" : ""}`}
-                          placeholder="Contact (11 digits)"
-                        />
+                    {/* Address */}
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+                        <FaMapMarkerAlt className="text-green-600" />
                       </div>
-                      <div className="flex items-center">
-                        <FaTractor className="text-green-700 mr-3" />
-                        <input
-                          type="number"
-                          name="hectares"
-                          value={editForm.hectares}
-                          onChange={handleEditChange}
-                          step="0.01"
-                          min="0"
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.hectares ? "bg-yellow-100" : ""}`}
-                          placeholder="Farm Size (Hectares)"
-                        />
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <select
-                          name="addressBarangay"
-                          value={editForm.addressBarangay}
-                          onChange={handleEditChange}
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.address ? "bg-yellow-100" : ""}`}
-                        >
-                          <option value="">Select Barangay (Address)</option>
-                          {Object.keys(canlaonLocations).map((barangay) => (
-                            <option key={barangay} value={barangay}>
-                              {barangay}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <select
-                          name="addressSitio"
-                          value={editForm.addressSitio}
-                          onChange={handleEditChange}
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.address ? "bg-yellow-100" : ""}`}
-                          disabled={!selectedAddressBarangay}
-                        >
-                          <option value="">Select Sitio (Address)</option>
-                          {selectedAddressBarangay &&
-                            canlaonLocations[selectedAddressBarangay].sitios.map((sitio) => (
-                              <option key={sitio.name} value={sitio.name}>
-                                {sitio.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <select
-                          name="farmBarangay"
-                          value={editForm.farmBarangay}
-                          onChange={handleEditChange}
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.farmLocation ? "bg-yellow-100" : ""}`}
-                        >
-                          <option value="">Select Barangay (Farm)</option>
-                          {Object.keys(canlaonLocations).map((barangay) => (
-                            <option key={barangay} value={barangay}>
-                              {barangay}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <select
-                          name="farmSitio"
-                          value={editForm.farmSitio}
-                          onChange={handleEditChange}
-                          className={`w-full border rounded p-2 text-gray-700 ${updateHighlights.farmLocation ? "bg-yellow-100" : ""}`}
-                          disabled={!selectedFarmBarangay}
-                        >
-                          <option value="">Select Sitio (Farm)</option>
-                          {selectedFarmBarangay &&
-                            canlaonLocations[selectedFarmBarangay].sitios.map((sitio) => (
-                              <option key={sitio.name} value={sitio.name}>
-                                {sitio.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div className="col-span-2">
-                        <div className={`space-y-4 p-4 rounded ${updateHighlights.crops ? "bg-yellow-50" : "bg-gray-50"}`}>
-                          <h4 className="text-lg font-semibold text-green-700 flex items-center">
-                            <FaTractor className="mr-2" /> Crops (Changes highlighted)
-                          </h4>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Address</p>
+                        {editingFarmer === farmer.id ? (
                           <div className="space-y-2">
-                            {farmerVegetables.map((crop, index) => {
-                              const oldCrop = originalVegetables[index];
-                              const isChanged = oldCrop && (crop.name !== oldCrop.name || crop.plantingDate !== oldCrop.plantingDate || crop.harvestDate !== oldCrop.harvestDate);
-                              const isNew = !oldCrop;
-                              return (
-                                <div key={index} className={`grid grid-cols-4 gap-2 items-center p-2 rounded ${isChanged || isNew ? "bg-yellow-100" : ""}`}>
-                                  <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Crop</span>
+                            <select
+                              name="addressBarangay"
+                              value={editForm.addressBarangay}
+                              onChange={handleEditChange}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            >
+                              <option value="">Select Barangay</option>
+                              {Object.keys(canlaonLocations).map((barangay) => (
+                                <option key={barangay} value={barangay}>
+                                  {barangay}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              name="addressSitio"
+                              value={editForm.addressSitio}
+                              onChange={handleEditChange}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              disabled={!selectedAddressBarangay}
+                            >
+                              <option value="">Select Sitio</option>
+                              {selectedAddressBarangay &&
+                                canlaonLocations[selectedAddressBarangay].sitios.map((sitio) => (
+                                  <option key={sitio.name} value={sitio.name}>
+                                    {sitio.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <p className="text-gray-900">{farmer.address}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Farm Details */}
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
+                        <FaTractor className="text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Farm Location</p>
+                        {editingFarmer === farmer.id ? (
+                          <div className="space-y-2">
+                            <select
+                              name="farmBarangay"
+                              value={editForm.farmBarangay}
+                              onChange={handleEditChange}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            >
+                              <option value="">Select Barangay</option>
+                              {Object.keys(canlaonLocations).map((barangay) => (
+                                <option key={barangay} value={barangay}>
+                                  {barangay}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              name="farmSitio"
+                              value={editForm.farmSitio}
+                              onChange={handleEditChange}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              disabled={!selectedFarmBarangay}
+                            >
+                              <option value="">Select Sitio</option>
+                              {selectedFarmBarangay &&
+                                canlaonLocations[selectedFarmBarangay].sitios.map((sitio) => (
+                                  <option key={sitio.name} value={sitio.name}>
+                                    {sitio.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <p className="text-gray-900">{farmer.farmLocation}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Farm Size */}
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
+                        <FaTractor className="text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Farm Size</p>
+                        {editingFarmer === farmer.id ? (
+                          <input
+                            type="number"
+                            name="hectares"
+                            value={editForm.hectares}
+                            onChange={handleEditChange}
+                            step="0.01"
+                            min="0"
+                            className={`w-full border rounded px-3 py-1 ${updateHighlights.hectares ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                          />
+                        ) : (
+                          <p className="text-gray-900">{farmer.hectares || "0"} hectares</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Crops Section */}
+                    <div className="border-t border-gray-100 pt-4 mt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium text-gray-900 flex items-center">
+                          <FaCrop className="mr-2 text-green-600" />
+                          Current Crops
+                        </p>
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                          {farmer.mainCrops?.length || 0} crops
+                        </span>
+                      </div>
+
+                      {editingFarmer === farmer.id ? (
+                        <div className={`space-y-3 ${updateHighlights.crops ? "bg-yellow-50 p-3 rounded-lg" : ""}`}>
+                          {farmerVegetables.map((crop, index) => {
+                            const oldCrop = originalVegetables[index];
+                            const isChanged = oldCrop && (crop.name !== oldCrop.name || crop.plantingDate !== oldCrop.plantingDate || crop.harvestDate !== oldCrop.harvestDate);
+                            const isNew = !oldCrop;
+                            
+                            return (
+                              <div key={index} className={`p-3 rounded-lg border ${isChanged || isNew ? "border-yellow-200 bg-yellow-50" : "border-gray-200"}`}>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div>
+                                    <label className="text-xs text-gray-500">Crop</label>
                                     <select
                                       value={crop.name}
                                       onChange={(e) => updateCrop(index, "name", e.target.value)}
-                                      className="border rounded p-1"
+                                      className="w-full text-sm border rounded px-2 py-1"
                                     >
-                                      <option value="">Select Vegetable</option>
+                                      <option value="">Select</option>
                                       {vegetables.map((veg) => (
                                         <option key={veg.id} value={veg.name}>
                                           {veg.name}
                                         </option>
                                       ))}
                                     </select>
-                                    {crop.name && vegetables.find(v => v.name === crop.name)?.harvestAfter && (
-                                      <p className="text-xs text-gray-600 flex items-center">
-                                        <FaInfoCircle className="mr-1" /> {calculateDuration(vegetables.find(v => v.name === crop.name).harvestAfter)}
-                                      </p>
-                                    )}
                                   </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Planting</span>
+                                  <div>
+                                    <label className="text-xs text-gray-500">Planting</label>
                                     <input
                                       type="date"
                                       value={crop.plantingDate}
                                       onChange={(e) => updateCrop(index, "plantingDate", e.target.value)}
-                                      className="border rounded p-1"
+                                      className="w-full text-sm border rounded px-2 py-1"
                                     />
                                   </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Harvest</span>
+                                  <div>
+                                    <label className="text-xs text-gray-500">Harvest</label>
                                     <input
                                       type="date"
                                       value={crop.harvestDate}
                                       onChange={(e) => updateCrop(index, "harvestDate", e.target.value)}
-                                      className="border rounded p-1"
+                                      className="w-full text-sm border rounded px-2 py-1"
                                     />
                                   </div>
-                                  <div className="flex flex-col justify-center">
-                                    <button
-                                      onClick={() => removeCrop(crop.id, index)}
-                                      className="text-red-500 mt-4"
-                                    >
-                                      <FaTimes />
-                                    </button>
-                                  </div>
-                                  {oldCrop && (
-                                    <div className="col-span-4 text-xs text-gray-500 mt-1">
-                                      Old: {oldCrop.name} (Plant: {oldCrop.plantingDate}, Harvest: {oldCrop.harvestDate})
-                                    </div>
-                                  )}
-                                  {isNew && <div className="col-span-4 text-xs text-blue-500">New crop added</div>}
                                 </div>
-                              );
-                            })}
-                          </div>
-                          <div className="grid grid-cols-4 gap-2 items-center mt-4">
-                            <select
-                              name="name"
-                              value={newCrop.name}
-                              onChange={handleNewCropChange}
-                              className="border rounded p-2"
+                                <div className="flex items-center justify-between mt-2">
+                                  <button
+                                    onClick={() => removeCrop(crop.id, index)}
+                                    className="text-xs text-red-600 hover:text-red-700 flex items-center"
+                                  >
+                                    <FaTimes className="mr-1" />
+                                    Remove
+                                  </button>
+                                  {crop.name && (
+                                    <span className="text-xs text-gray-500">
+                                      {calculateDuration(vegetables.find(v => v.name === crop.name)?.harvestAfter || 60)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Add New Crop */}
+                          <div className="border border-dashed border-gray-300 rounded-lg p-3">
+                            <div className="grid grid-cols-3 gap-2 mb-2">
+                              <div>
+                                <label className="text-xs text-gray-500">New Crop</label>
+                                <select
+                                  name="name"
+                                  value={newCrop.name}
+                                  onChange={handleNewCropChange}
+                                  className="w-full text-sm border rounded px-2 py-1"
+                                >
+                                  <option value="">Select</option>
+                                  {vegetables.map((veg) => (
+                                    <option key={veg.id} value={veg.name}>
+                                      {veg.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500">Planting</label>
+                                <input
+                                  type="date"
+                                  name="plantingDate"
+                                  value={newCrop.plantingDate}
+                                  onChange={handleNewCropChange}
+                                  className="w-full text-sm border rounded px-2 py-1"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500">Harvest</label>
+                                <input
+                                  type="date"
+                                  name="harvestDate"
+                                  value={newCrop.harvestDate}
+                                  onChange={handleNewCropChange}
+                                  className="w-full text-sm border rounded px-2 py-1"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              onClick={addCrop}
+                              className="w-full text-green-600 hover:text-green-700 text-sm flex items-center justify-center border border-green-600 rounded px-3 py-1 hover:bg-green-50 transition-colors"
                             >
-                              <option value="">Select Vegetable</option>
-                              {vegetables.map((veg) => (
-                                <option key={veg.id} value={veg.name}>
-                                  {veg.name}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              type="date"
-                              name="plantingDate"
-                              value={newCrop.plantingDate}
-                              onChange={handleNewCropChange}
-                              className="border rounded p-2"
-                            />
-                            <input
-                              type="date"
-                              name="harvestDate"
-                              value={newCrop.harvestDate}
-                              onChange={handleNewCropChange}
-                              className="border rounded p-2"
-                            />
-                            <button onClick={addCrop} className="text-green-500 border rounded p-2">
-                              <FaPlus />
+                              <FaPlus className="mr-2" />
+                              Add Crop
                             </button>
                           </div>
                         </div>
-                      </div>
-                      <div className="col-span-2 flex space-x-2 mt-2">
-                        <button
-                          onClick={() => handleSave(farmer.id)}
-                          className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800 transition"
-                          disabled={isGeocoding}
-                        >
-                          {isGeocoding ? "Geocoding..." : "Save"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingFarmer(null);
-                            setUpdateHighlights({});
-                          }}
-                          className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {farmer.mainCrops?.length > 0 ? (
+                            farmer.mainCrops.map((crop, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{crop.name}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {crop.plantingDate} → {crop.harvestDate}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                  {calculateDuration(vegetables.find(v => v.name === crop.name)?.harvestAfter || 60)}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-2">No crops registered</p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center">
-                        <FaPhone className="text-green-700 mr-3" />
-                        <span className="text-gray-700">{farmer.contact}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <span className="text-gray-700">{farmer.address}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <FaMapMarkerAlt className="text-green-700 mr-3" />
-                        <span className="text-gray-700">{farmer.farmLocation}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <FaTractor className="text-green-700 mr-3" />
-                        <span className="text-gray-700">
-                          {farmer.mainCrops.length > 0 ? farmer.mainCrops.map(c => c.name).join(", ") : "No crops listed"}
-                        </span>
+                  </div>
+
+                  {/* Edit Mode Actions */}
+                  {editingFarmer === farmer.id && (
+                    <div className="mt-6 pt-6 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-500">
+                          <span className={`px-2 py-1 rounded ${updateHighlights.fullName || updateHighlights.contact || updateHighlights.address || updateHighlights.farmLocation || updateHighlights.hectares || updateHighlights.crops ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                            {Object.keys(updateHighlights).filter(key => updateHighlights[key]).length} changes
+                          </span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleSave(farmer.id)}
+                            disabled={isGeocoding}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center disabled:opacity-50"
+                          >
+                            <FaSave className="mr-2" />
+                            {isGeocoding ? "Processing..." : "Save Changes"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingFarmer(null);
+                              setUpdateHighlights({});
+                            }}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center"
+                          >
+                            <FaBan className="mr-2" />
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-            ))
-          ) : (
-            <div className="text-center p-6 bg-white rounded-lg shadow-lg">
-              <p className="text-gray-500">No farmers found.</p>
+            ))}
+          </div>
+        ) : (
+          /* List View */
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Farmer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crops</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredFarmers.map((farmer) => (
+                  <tr key={farmer.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                          <FaUser className="text-green-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{farmer.fullName}</p>
+                          <p className="text-xs text-gray-500">{farmer.hectares || 0} hectares</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-gray-900">{farmer.contact}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-gray-900">{farmer.farmLocation}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {farmer.mainCrops?.slice(0, 3).map((crop, index) => (
+                          <span key={index} className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                            {crop.name}
+                          </span>
+                        ))}
+                        {farmer.mainCrops?.length > 3 && (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            +{farmer.mainCrops.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(farmer)}
+                          className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(farmer.id)}
+                          className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {filteredFarmers.length === 0 && !isLoading && (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+            <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <FaUser className="text-gray-400 text-2xl" />
             </div>
-          )}
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No farmers found</h3>
+            <p className="text-gray-500 max-w-md mx-auto">
+              {searchQuery || locationFilter
+                ? "Try adjusting your search or filter to find what you're looking for."
+                : "No farmers have been registered yet."}
+            </p>
+            {(searchQuery || locationFilter) && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setLocationFilter("");
+                }}
+                className="mt-4 px-4 py-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="bg-white border-t border-gray-100 py-6 mt-8">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="text-sm text-gray-500">
+              <p>Department of Agriculture - Canlaon City</p>
+              <p className="text-xs mt-1">Farmer Management System</p>
+            </div>
+            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-4 md:mt-0">
+              <span>Total: {farmers.length} farmers</span>
+              <span>Active: {farmers.length} registered</span>
+            </div>
+          </div>
         </div>
-      ) : (
-        /* List view - similar edits can be applied */
-        <div className="overflow-x-auto">
-          {/* Implement list view with similar editing logic if needed */}
-          <p>List view not fully implemented.</p>
-        </div>
-      )}
+      </div>
     </div>
   );
-}; 
+};
 
 export default Farmer;
