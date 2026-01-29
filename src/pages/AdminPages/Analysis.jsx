@@ -39,12 +39,8 @@ const AgriDashboard = () => {
   const [currentFarmerIndex, setCurrentFarmerIndex] = useState(0);
   const [totalProduction, setTotalProduction] = useState(0);
   const [averageFarmSize, setAverageFarmSize] = useState(0);
-  const [seasonDistribution, setSeasonDistribution] = useState([]);
   const [topProducingFarmers, setTopProducingFarmers] = useState([]);
   const [landOwnershipDistribution, setLandOwnershipDistribution] = useState([]);
-  const [farmTypeDistribution, setFarmTypeDistribution] = useState([]);
-  const [topBarangayPerSeason, setTopBarangayPerSeason] = useState([]);
-  const [distributionType, setDistributionType] = useState('farmType');
   const startX = useRef(null);
 
   useEffect(() => {
@@ -119,47 +115,12 @@ const AgriDashboard = () => {
         const avgFarmSize = totalFarmers > 0 ? totalProd / totalFarmers : 0;
         setAverageFarmSize(avgFarmSize.toFixed(2));
 
-        const seasonDist = farmers.reduce((acc, farmer) => {
-          const season = farmer.season || "Default";
-          acc[season] = (acc[season] || 0) + 1;
-          return acc;
-        }, {});
-        setSeasonDistribution(Object.entries(seasonDist).map(([season, count]) => ({ season, count })));
-
         const landOwnershipDist = farmers.reduce((acc, farmer) => {
           const ownership = farmer.landOwnership || "Unknown";
           acc[ownership] = (acc[ownership] || 0) + 1;
           return acc;
         }, {});
         setLandOwnershipDistribution(Object.entries(landOwnershipDist).map(([ownership, count]) => ({ ownership, count })));
-
-        const farmTypeDist = farmers.reduce((acc, farmer) => {
-          const type = farmer.farmType || "Unknown";
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, {});
-        setFarmTypeDistribution(Object.entries(farmTypeDist).map(([type, count]) => ({ type, count })));
-
-        const seasonBarangayProd = farmers.reduce((acc, farmer) => {
-          const season = farmer.season || "Unknown";
-          const barangay = farmer.farmBarangay || "Unknown";
-          const prod = Number(farmer.hectares) || 0;
-          if (!acc[season]) acc[season] = {};
-          acc[season][barangay] = (acc[season][barangay] || 0) + prod;
-          return acc;
-        }, {});
-        const topPerSeason = Object.entries(seasonBarangayProd).map(([season, barangs]) => {
-          let maxProd = 0;
-          let topBar = "None";
-          Object.entries(barangs).forEach(([bar, prod]) => {
-            if (prod > maxProd) {
-              maxProd = prod;
-              topBar = bar;
-            }
-          });
-          return { season, barangay: topBar, production: maxProd };
-        });
-        setTopBarangayPerSeason(topPerSeason);
 
         const topFarmers = farmers
           .map(farmer => ({
@@ -235,14 +196,6 @@ const AgriDashboard = () => {
     title: { text: 'Vegetable Production Trends 📈', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
   };
 
-  const seasonOptions = {
-    chart: { type: 'pie', animations: { enabled: true } },
-    labels: seasonDistribution.map(item => item.season),
-    colors: COLORS,
-    title: { text: 'Season Distribution 📊', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
-    legend: { position: 'bottom' },
-  };
-
   const topFarmersOptions = {
     chart: { type: 'bar', toolbar: { show: true }, animations: { enabled: true } },
     colors: COLORS,
@@ -254,23 +207,12 @@ const AgriDashboard = () => {
     legend: { show: false },
   };
 
-  const topBarangayOptions = {
-    chart: { type: 'bar', toolbar: { show: true } },
-    colors: COLORS,
-    plotOptions: { bar: { borderRadius: 8, distributed: true } },
-    xaxis: { categories: topBarangayPerSeason.map(item => item.season), labels: { rotate: -45 } },
-    yaxis: { title: { text: 'Production (ha)' } },
-    title: { text: 'Top Barangay per Season', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
-  };
-
-  const distributionOptions = {
+  const landOwnershipOptions = {
     chart: { type: 'donut', animations: { enabled: true } },
-    labels: distributionType === 'farmType' 
-      ? farmTypeDistribution.map(item => item.type)
-      : landOwnershipDistribution.map(item => item.ownership),
+    labels: landOwnershipDistribution.map(item => item.ownership),
     colors: COLORS,
     title: { 
-      text: distributionType === 'farmType' ? 'Farm Type Distribution' : 'Land Ownership Distribution',
+      text: 'Land Ownership Distribution',
       align: 'left',
       style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' }
     },
@@ -356,11 +298,6 @@ const AgriDashboard = () => {
               <ReactApexChart options={prodTrendsOptions} series={[{ name: 'Production', data: highDemandVeggies.map(item => item.value) }]} type="line" height={320} />
             </DashboardCard>
 
-            {/* Season Distribution */}
-            <DashboardCard>
-              <ReactApexChart options={seasonOptions} series={seasonDistribution.map(item => item.count)} type="pie" height={320} />
-            </DashboardCard>
-
             {/* Top Producing Farmers */}
             <DashboardCard>
               <ReactApexChart options={topFarmersOptions} series={[{ data: topProducingFarmers.map(item => item.production) }]} type="bar" height={320} />
@@ -392,41 +329,11 @@ const AgriDashboard = () => {
               </div>
             </DashboardCard>
 
-            {/* Top Barangay per Season */}
-            <DashboardCard>
-              <ReactApexChart options={topBarangayOptions} series={[{ data: topBarangayPerSeason.map(item => item.production) }]} type="bar" height={280} />
-            </DashboardCard>
-
-            {/* Distribution Toggle */}
-            <DashboardCard title="Farmer Distributions" icon={<FaChartPie />}>
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setDistributionType('farmType')}
-                  className={`flex-1 py-2 px-4 rounded-xl font-semibold transition-all ${
-                    distributionType === 'farmType'
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Farm Type
-                </button>
-                <button
-                  onClick={() => setDistributionType('landOwnership')}
-                  className={`flex-1 py-2 px-4 rounded-xl font-semibold transition-all ${
-                    distributionType === 'landOwnership'
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Land Ownership
-                </button>
-              </div>
+            {/* Land Ownership Distribution */}
+            <DashboardCard title="Land Ownership" icon={<FaChartPie />}>
               <ReactApexChart
-                options={distributionOptions}
-                series={distributionType === 'farmType'
-                  ? farmTypeDistribution.map(item => item.count)
-                  : landOwnershipDistribution.map(item => item.count)
-                }
+                options={landOwnershipOptions}
+                series={landOwnershipDistribution.map(item => item.count)}
                 type="donut"
                 height={280}
               />

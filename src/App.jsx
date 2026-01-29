@@ -23,18 +23,18 @@ import Drawmap from "./pages/AdminPages/DrawMap";
 import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 import Dashboard from "./pages/AdminPages/Dashboard";
 
-
-
 function App() {
   return (
     <Router>
       <Routes>
+        {/* Main Layout Routes - Sign In, Forgot Password & Sign Up */}
         <Route path="/" element={<MainLayout />}>
           <Route index element={<SignIn />} />
           <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="signup" element={<SignUp />} />
         </Route>
 
-        {/* Admin Routes */}
+        {/* Admin Routes - Protected Dashboard Area */}
         <Route path="/home" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="maps" element={<Maps />} />
@@ -49,30 +49,21 @@ function App() {
               </ErrorBoundary>
             } 
           />
-          {/* Dynamic farmer profile route under /home */}
           <Route path="farmer" element={<Farmer />} />
           <Route path="usermanagement" element={<UserManagement />} />
           <Route path="farmerregister" element={<FarmerRegister />} />
           <Route path="reports" element={<Reports />} />
-           <Route path="suggest-farmer" element={<SuggestFarmer />} />
+          <Route path="suggest-farmer" element={<SuggestFarmer />} />
           <Route path="damagereport" element={<DamageReport />} />
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />
-          <Route path="farmer" element={<Farmer />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="reports" element={<Reports />} />
         </Route>
 
-        {/* Root-level fallback for farmer profile (optional, for non-admin access) */}
+        {/* Root-level Farmer Profile Route (optional, for non-admin access) */}
         <Route path="/farmer/:id" element={<Farmer />} />
 
-        {/* Admin Signup Routes */}
-        <Route path="/adminSignup" element={<SignUpLayout />}>
-          <Route index element={<SignUp />} />
-          <Route path="signup" element={<SignUp />} />
-        </Route>
-
-        {/* FarmerRegister Routes (renamed to avoid conflict) */}
+        {/* Farmer Registration Routes */}
         <Route path="/register" element={<FarmerLayout />}>
           <Route index element={<FarmerRegister />} />
           <Route path="farmerregister" element={<FarmerRegister />} />
@@ -83,5 +74,3 @@ function App() {
 }
 
 export default App;
-
-

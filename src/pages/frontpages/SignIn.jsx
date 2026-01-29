@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -15,7 +14,6 @@ export function SignIn() {
   const [loading, setLoading] = useState(false);
   const [localReply, setLocalReply] = useState(null);
   const [focusedInput, setFocusedInput] = useState(null);
-  const navigate = useNavigate();
 
   const togglePasswordVisibility = () => setPasswordShown((prev) => !prev);
 
@@ -43,9 +41,9 @@ export function SignIn() {
         // Redirect based on position
         setTimeout(() => {
           if (position === "admin") {
-            navigate("/home");
+            window.location.href = "/home";
           } else if (position === "user") {
-            navigate("/user");
+            window.location.href = "/user";
           } else {
             setError("Invalid user position. Contact support.");
             setLocalReply({ type: "error", message: "Invalid user position" });
@@ -77,6 +75,14 @@ export function SignIn() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const navigateToForgotPassword = () => {
+    window.location.href = "/forgot-password";
+  };
+
+  const navigateToSignUp = () => {
+    window.location.href = "/signup";
   };
 
   return (
@@ -140,7 +146,7 @@ export function SignIn() {
           )}
 
           {/* Sign In Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-5">
             {/* Email Input */}
             <div className="relative">
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -214,21 +220,22 @@ export function SignIn() {
               </div>
             </div>
 
-           {/* Forgot Password Link */}
-<div className="flex justify-end">
-  <button
-    type="button"
-    onClick={() => navigate("/forgot-password")}
-    className="text-sm text-green-600 hover:text-green-700 font-medium hover:underline transition-colors"
-    disabled={loading}
-  >
-    Forgot password?
-  </button>
-</div>
+            {/* Forgot Password Link */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={navigateToForgotPassword}
+                className="text-sm text-green-600 hover:text-green-700 font-medium hover:underline transition-colors"
+                disabled={loading}
+              >
+                Forgot password?
+              </button>
+            </div>
 
             {/* Submit Button */}
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               className={`w-full py-3.5 px-6 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 transform ${
                 loading
                   ? "bg-gray-400 cursor-not-allowed"
@@ -250,14 +257,18 @@ export function SignIn() {
                 </span>
               )}
             </button>
-          </form>
+          </div>
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-600">
               Don't have an account?{" "}
-              <button className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors">
-                Contact Administrator
+              <button 
+                onClick={navigateToSignUp}
+                className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors"
+                disabled={loading}
+              >
+                Sign Up
               </button>
             </p>
           </div>

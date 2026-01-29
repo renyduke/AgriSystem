@@ -33,6 +33,11 @@ const Dashboard = () => {
   // Notification state
   const [notifications, setNotifications] = useState([]);
 
+  // NEW: Overview filters
+  const [overviewYearFilter, setOverviewYearFilter] = useState('all');
+  const [overviewCommodityFilter, setOverviewCommodityFilter] = useState('all');
+  const [overviewDataView, setOverviewDataView] = useState('volume'); // 'volume' or 'price'
+
   // ============================================================================
   // UTILITY FUNCTIONS
   // ============================================================================
@@ -103,6 +108,124 @@ const Dashboard = () => {
       console.error('Error fetching model info:', err);
     }
   };
+
+  // ============================================================================
+  // NEW: DATA ANALYSIS FUNCTIONS FOR OVERVIEW
+  // ============================================================================
+
+  const analyzeVolumeData = useMemo(() => {
+    if (!dashboardData) return null;
+
+    let filteredData = dashboardData.volume_data;
+    
+    // Apply filters
+    if (overviewYearFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
+    }
+    if (overviewCommodityFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.commodity === overviewCommodityFilter);
+    }
+
+    // Group by year-month-week-commodity
+    const grouped = {};
+    filteredData.forEach(item => {
+      const key = `${item.year}-${item.month}-${item.week}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          year: item.year,
+          month: item.month,
+          week: item.week,
+          week_label: item.week_label,
+          commodities: {},
+          totalVolume: 0
+        };
+      }
+      grouped[key].commodities[item.commodity] = item.volume;
+      grouped[key].totalVolume += item.volume;
+    });
+
+    // Convert to array and sort
+    const result = Object.values(grouped).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      if (a.month !== b.month) return b.month - a.month;
+      return b.week - a.week;
+    });
+
+    // Calculate completeness
+    const expectedCommodities = overviewCommodityFilter === 'all' 
+      ? dashboardData.commodities.length 
+      : 1;
+    
+    result.forEach(item => {
+      const actualCommodities = Object.keys(item.commodities).length;
+      item.completeness = (actualCommodities / expectedCommodities) * 100;
+      item.missingCommodities = expectedCommodities - actualCommodities;
+    });
+
+    return result;
+  }, [dashboardData, overviewYearFilter, overviewCommodityFilter]);
+
+  const analyzePriceData = useMemo(() => {
+    if (!dashboardData) return null;
+
+    let filteredData = dashboardData.price_data;
+    
+    // Apply filters
+    if (overviewYearFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
+    }
+    if (overviewCommodityFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.commodity === overviewCommodityFilter);
+    }
+
+    // Group by year-month-week-commodity
+    const grouped = {};
+    filteredData.forEach(item => {
+      const key = `${item.year}-${item.month}-${item.week}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          year: item.year,
+          month: item.month,
+          week: item.week,
+          week_label: item.week_label,
+          commodities: {}
+        };
+      }
+      grouped[key].commodities[item.commodity] = {
+        lowest: item.lowest_price,
+        highest: item.highest_price,
+        average: item.average_price
+      };
+    });
+
+    // Convert to array and sort
+    const result = Object.values(grouped).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      if (a.month !== b.month) return b.month - a.month;
+      return b.week - a.week;
+    });
+
+    // Calculate completeness and averages
+    const expectedCommodities = overviewCommodityFilter === 'all' 
+      ? dashboardData.commodities.length 
+      : 1;
+    
+    result.forEach(item => {
+      const actualCommodities = Object.keys(item.commodities).length;
+      item.completeness = (actualCommodities / expectedCommodities) * 100;
+      item.missingCommodities = expectedCommodities - actualCommodities;
+      
+      // Calculate overall averages for the week
+      const prices = Object.values(item.commodities);
+      if (prices.length > 0) {
+        item.weekLowest = Math.min(...prices.map(p => p.lowest));
+        item.weekHighest = Math.max(...prices.map(p => p.highest));
+        item.weekAverage = prices.reduce((sum, p) => sum + p.average, 0) / prices.length;
+      }
+    });
+
+    return result;
+  }, [dashboardData, overviewYearFilter, overviewCommodityFilter]);
 
   // ============================================================================
   // FORECAST HANDLING
@@ -316,7 +439,7 @@ CONFIG = {
   };
 
   // ============================================================================
-  // CHART CONFIGURATIONS - SINGLE COMMODITY
+  // CHART CONFIGURATIONS
   // ============================================================================
 
   const getVolumeChartOptions = () => {
@@ -360,10 +483,6 @@ CONFIG = {
       }
     };
   };
-
-  // ============================================================================
-  // CHART CONFIGURATIONS - MULTI-COMMODITY COMPARISON
-  // ============================================================================
 
   const getMultiCommodityBarChart = () => {
     if (!dashboardData || comparisonCommodities.length === 0) {
@@ -714,10 +833,6 @@ CONFIG = {
     };
   };
 
-  // ============================================================================
-  // FORECAST CHART
-  // ============================================================================
-
   const getForecastChartOptions = () => {
     if (!forecastResult) return { series: [], options: {} };
 
@@ -795,6 +910,12 @@ CONFIG = {
     );
   }
 
+  // Get available years for filter
+  const availableYears = [...new Set([
+    ...dashboardData.volume_data.map(d => d.year),
+    ...dashboardData.price_data.map(d => d.year)
+  ])].sort((a, b) => b - a);
+
   // ============================================================================
   // MAIN RENDER
   // ============================================================================
@@ -829,7 +950,7 @@ CONFIG = {
               <p className="text-sm text-gray-600 mt-1">Multi-Period Agricultural Forecasting & Analysis</p>
             </div>
             <div className="flex items-center gap-4">
-              <button
+              {/* <button
                 onClick={() => setShowModelManager(!showModelManager)}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
               >
@@ -840,7 +961,7 @@ CONFIG = {
                     {modelInfo.total_models}
                   </span>
                 )}
-              </button>
+              </button> */}
               <div className="text-right">
                 <p className="text-sm text-gray-500">Last Updated</p>
                 <p className="text-lg font-semibold text-gray-700">January 21, 2026</p>
@@ -849,476 +970,6 @@ CONFIG = {
           </div>
         </div>
       </header>
-
-      {/* Enhanced Model Manager Modal */}
-      {showModelManager && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden border border-gray-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-xl">
-                    <span className="text-3xl">🤖</span>
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Model Intelligence Hub</h2>
-                    <p className="text-white/80 text-sm">Manage AI models and train with custom datasets</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowModelManager(false)}
-                  className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Stats Bar */}
-            {modelInfo && modelInfo.models && modelInfo.models.length > 0 && (
-              <div className="bg-gray-50 border-b border-gray-200 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {modelInfo.models.filter(m => m.is_loaded).length} Active
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {modelInfo.total_models} Total Models
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {(modelInfo.models.reduce((sum, m) => sum + (m.performance?.accuracy || 0), 0) / modelInfo.models.length).toFixed(1)}% Avg Accuracy
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-500 bg-white px-3 py-1 rounded-full border">
-                    Last updated: {new Date().toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Main Content */}
-            <div className="p-6 space-y-8 overflow-y-auto max-h-[calc(90vh-200px)]">
-              {/* Upload Section - Modern Card */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 shadow-sm">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-blue-100 p-2 rounded-lg">
-                    <span className="text-2xl">📤</span>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Train New Models</h3>
-                    <p className="text-sm text-gray-600">Upload datasets to train custom AI models</p>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  {/* File Upload Card */}
-                  <div className="bg-white rounded-xl border-2 border-dashed border-blue-200 p-8 text-center hover:border-blue-400 transition-colors">
-                    <div className="mx-auto w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                      <span className="text-3xl">📁</span>
-                    </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Upload Dataset</h4>
-                    <p className="text-sm text-gray-600 mb-6">Drag & drop or browse CSV files</p>
-                    
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="csv-upload"
-                    />
-                    <label
-                      htmlFor="csv-upload"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg cursor-pointer transition-all shadow-md hover:shadow-lg"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      <span>Choose File</span>
-                    </label>
-                    
-                    <p className="text-xs text-gray-500 mt-4">Supports .csv files up to 100MB</p>
-                  </div>
-
-                  {/* Progress Bar */}
-                  {uploadProgress > 0 && uploadProgress < 100 && (
-                    <div className="bg-white rounded-xl p-4 border border-blue-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">Uploading...</span>
-                        <span className="text-sm font-bold text-blue-600">{uploadProgress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button
-                      onClick={downloadTrainingScript}
-                      className="bg-white border-2 border-green-200 hover:border-green-400 text-green-700 rounded-xl p-4 transition-all hover:shadow-md group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="bg-green-50 p-2 rounded-lg group-hover:bg-green-100 transition-colors">
-                          <span className="text-xl">📥</span>
-                        </div>
-                        <div className="text-left">
-                          <p className="font-semibold">Download Template</p>
-                          <p className="text-xs text-gray-600">Config & training script</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    <button className="bg-white border-2 border-blue-200 hover:border-blue-400 text-blue-700 rounded-xl p-4 transition-all hover:shadow-md group">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-blue-50 p-2 rounded-lg group-hover:bg-blue-100 transition-colors">
-                          <span className="text-xl">📊</span>
-                        </div>
-                        <div className="text-left">
-                          <p className="font-semibold">View Documentation</p>
-                          <p className="text-xs text-gray-600">API & training guide</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    <button className="bg-white border-2 border-purple-200 hover:border-purple-400 text-purple-700 rounded-xl p-4 transition-all hover:shadow-md group">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-purple-50 p-2 rounded-lg group-hover:bg-purple-100 transition-colors">
-                          <span className="text-xl">⚙️</span>
-                        </div>
-                        <div className="text-left">
-                          <p className="font-semibold">Advanced Settings</p>
-                          <p className="text-xs text-gray-600">Model parameters</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Instructions Panel */}
-                  <div className="bg-white rounded-xl p-5 border border-gray-200">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="bg-amber-50 p-2 rounded-lg">
-                        <span className="text-xl">📝</span>
-                      </div>
-                      <h4 className="font-semibold text-gray-900">Quick Start Guide</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="flex items-start gap-3">
-                        <span className="bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-full text-sm">1</span>
-                        <div>
-                          <p className="font-medium text-sm">Upload CSV</p>
-                          <p className="text-xs text-gray-600">Commodity, date, volume, price</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-full text-sm">2</span>
-                        <div>
-                          <p className="font-medium text-sm">Configure</p>
-                          <p className="text-xs text-gray-600">Edit template for your data</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-full text-sm">3</span>
-                        <div>
-                          <p className="font-medium text-sm">Train Models</p>
-                          <p className="text-xs text-gray-600">Run training script</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-full text-sm">4</span>
-                        <div>
-                          <p className="font-medium text-sm">Deploy</p>
-                          <p className="text-xs text-gray-600">Restart API to load models</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Models Table Section */}
-              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-gray-50 to-white p-6 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-purple-50 p-2 rounded-lg">
-                        <span className="text-xl">📊</span>
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900">Loaded Models</h3>
-                        <p className="text-sm text-gray-600">
-                          {modelInfo ? `${modelInfo.total_models} models available` : 'Loading models...'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                        Filter
-                      </button>
-                      <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                        Sort by
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  {modelInfo && modelInfo.models && modelInfo.models.length > 0 ? (
-                    <div className="overflow-x-auto rounded-xl border border-gray-200">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Commodity
-                            </th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Type
-                            </th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Performance
-                            </th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Details
-                            </th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Status
-                            </th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {modelInfo.models.map((model, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-lg ${
-                                    model.data_type === 'volume' ? 'bg-blue-50' : 'bg-green-50'
-                                  }`}>
-                                    <span className={model.data_type === 'volume' ? 'text-blue-600' : 'text-green-600'}>
-                                      {model.data_type === 'volume' ? '📦' : '💰'}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <p className="font-semibold text-gray-900">{model.commodity}</p>
-                                    <p className="text-xs text-gray-500">{model.model_type || 'LSTM'}</p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                  model.data_type === 'volume' 
-                                    ? 'bg-blue-100 text-blue-800' 
-                                    : 'bg-green-100 text-green-800'
-                                }`}>
-                                  {model.data_type.toUpperCase()}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                      <div 
-                                        className="bg-gradient-to-r from-green-400 to-emerald-500 h-full rounded-full"
-                                        style={{ width: `${model.performance?.accuracy || 0}%` }}
-                                      ></div>
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-900">
-                                      {model.performance?.accuracy ? `${model.performance.accuracy.toFixed(1)}%` : 'N/A'}
-                                    </span>
-                                  </div>
-                                  <div className="flex gap-3 text-xs text-gray-600">
-                                    <span>MAE: {model.performance?.mae ? model.performance.mae.toFixed(2) : 'N/A'}</span>
-                                    <span>RMSE: {model.performance?.rmse ? model.performance.rmse.toFixed(2) : 'N/A'}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                <div className="space-y-1">
-                                  <p>Epochs: {model.training_epochs || 'N/A'}</p>
-                                  <p>Updated: {model.training_date ? new Date(model.training_date).toLocaleDateString() : 'N/A'}</p>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${
-                                    model.is_loaded ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                                  }`}></div>
-                                  <span className={`text-sm font-medium ${
-                                    model.is_loaded ? 'text-green-700' : 'text-red-700'
-                                  }`}>
-                                    {model.is_loaded ? 'Active' : 'Inactive'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <button className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  </button>
-                                  <button className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                  </button>
-                                  <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                        <span className="text-4xl">📦</span>
-                      </div>
-                      <h4 className="text-xl font-semibold text-gray-900 mb-2">No Models Found</h4>
-                      <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                        Upload a dataset and train your first model to get started with AI-powered forecasting
-                      </p>
-                      <div className="flex justify-center gap-4">
-                        <button
-                          onClick={downloadTrainingScript}
-                          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-shadow"
-                        >
-                          Get Started
-                        </button>
-                        <button className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:border-gray-400 transition-colors">
-                          View Tutorial
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Performance Summary Cards */}
-              {modelInfo && modelInfo.models && modelInfo.models.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-blue-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-bold text-gray-900">Model Health</h4>
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <span className="text-blue-600 text-xl">📈</span>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 mb-2">
-                      {(modelInfo.models.reduce((sum, m) => sum + (m.performance?.accuracy || 0), 0) / modelInfo.models.length).toFixed(1)}%
-                    </div>
-                    <p className="text-sm text-gray-600">Average Accuracy</p>
-                    <div className="mt-4 flex items-center gap-2">
-                      <span className="text-xs text-green-600 font-semibold">+2.5%</span>
-                      <span className="text-xs text-gray-500">from last month</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-green-50 to-white rounded-2xl p-6 border border-green-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-bold text-gray-900">Active Models</h4>
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <span className="text-green-600 text-xl">⚡</span>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 mb-2">
-                      {modelInfo.models.filter(m => m.is_loaded).length}/{modelInfo.total_models}
-                    </div>
-                    <p className="text-sm text-gray-600">Ready for predictions</p>
-                    <div className="mt-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-green-400 to-emerald-500 h-2 rounded-full"
-                          style={{ width: `${(modelInfo.models.filter(m => m.is_loaded).length / modelInfo.total_models) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl p-6 border border-purple-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-bold text-gray-900">Recent Activity</h4>
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <span className="text-purple-600 text-xl">🔄</span>
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 mb-2">
-                      {modelInfo.models.filter(m => {
-                        const date = new Date(m.training_date);
-                        const now = new Date();
-                        return (now - date) / (1000 * 60 * 60 * 24) <= 7;
-                      }).length}
-                    </div>
-                    <p className="text-sm text-gray-600">Models trained this week</p>
-                    <div className="mt-4">
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
-                        </svg>
-                        Trending up
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gray-50 border-t border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg border">
-                    <span className="text-gray-600 text-sm">🤖</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Need help?</p>
-                    <p className="text-xs text-gray-600">Check our documentation or contact support</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowModelManager(false)}
-                    className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 hover:border-gray-400 font-medium rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      addNotification('Models refreshed successfully', 'success');
-                      fetchModelInfo();
-                    }}
-                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all shadow-md hover:shadow-lg"
-                  >
-                    Refresh Models
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -1364,7 +1015,7 @@ CONFIG = {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+          {/* <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">AI Models</p>
@@ -1372,7 +1023,7 @@ CONFIG = {
               </div>
               <div className="text-4xl">🤖</div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Forecast Controls */}
@@ -1518,88 +1169,350 @@ CONFIG = {
           </div>
 
           <div className="p-6">
-            {/* Forecast Tab */}
-            {activeTab === 'forecast' && (
-              <div>
-                {forecastResult ? (
-                  <div className="space-y-6">
-                    {/* Export Buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={exportForecastToCSV}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-2"
+            {/* ENHANCED OVERVIEW TAB */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* Filters */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">📋 Data Filters & View Options</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
+                      <select 
+                        value={overviewYearFilter}
+                        onChange={(e) => setOverviewYearFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
-                        <span>📥</span>
-                        <span>Export CSV</span>
-                      </button>
+                        <option value="all">All Years</option>
+                        {availableYears.map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
                     </div>
-
-                    {/* Metrics */}
-                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">📈 Performance Metrics</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {forecastResult.metrics.rmse !== undefined && (
-                          <>
-                            <div>
-                              <p className="text-sm text-gray-600">RMSE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.rmse.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">MAE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.mae.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">MAPE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.mape.toFixed(2)}%</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Accuracy</p>
-                              <p className="text-xl font-bold text-green-600">{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
-                            </div>
-                          </>
-                        )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Commodity</label>
+                      <select 
+                        value={overviewCommodityFilter}
+                        onChange={(e) => setOverviewCommodityFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All Commodities</option>
+                        {dashboardData.commodities.map(commodity => (
+                          <option key={commodity} value={commodity}>{commodity}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">View Type</label>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setOverviewDataView('volume')}
+                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            overviewDataView === 'volume' 
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-white text-gray-700 border border-gray-300'
+                          }`}
+                        >
+                          📦 Volume
+                        </button>
+                        <button 
+                          onClick={() => setOverviewDataView('price')}
+                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            overviewDataView === 'price' 
+                              ? 'bg-green-600 text-white' 
+                              : 'bg-white text-gray-700 border border-gray-300'
+                          }`}
+                        >
+                          💰 Price
+                        </button>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    {/* Chart */}
-                    <div>
-                      <ReactApexChart
-                        options={forecastChart.options}
-                        series={forecastChart.series}
-                        type="line"
-                        height={400}
-                      />
+                {/* VOLUME DATA TABLE */}
+                {overviewDataView === 'volume' && analyzeVolumeData && (
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-blue-100 p-2 rounded-lg">
+                            <span className="text-xl text-blue-600">📦</span>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900">Volume Data by Week</h3>
+                            <p className="text-sm text-gray-600">Aggregated weekly totals with completeness tracking</p>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {analyzeVolumeData.length} weeks • {overviewYearFilter === 'all' ? 'All years' : overviewYearFilter}
+                        </div>
+                      </div>
                     </div>
-
-                    {/* Data Table */}
+                    
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month/Year</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Volume (Kg)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodities</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completeness</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {forecastResult.forecast_data.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {formatPeriod(item, forecastResult.forecast_mode || 'weekly')}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {item.value.toFixed(2)} {forecastResult.data_type === 'price' ? '₱' : 'Kg'}
-                              </td>
-                            </tr>
-                          ))}
+                          {analyzeVolumeData.map((item, idx) => {
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const isComplete = item.completeness === 100;
+                            
+                            return (
+                              <tr key={idx} className={`hover:bg-blue-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {item.week_label || `Week ${item.week}, ${monthNames[item.month - 1]} ${item.year}`}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    W{item.week}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{monthNames[item.month - 1]} {item.year}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg font-bold text-blue-700">{item.totalVolume.toFixed(2)}</span>
+                                    <span className="text-xs text-gray-500">Kg</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.commodities.length : 1}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                                        <div 
+                                          className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                          style={{ width: `${item.completeness}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className={`text-xs font-bold ${isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
+                                        {item.completeness.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                    {!isComplete && (
+                                      <div className="text-xs text-yellow-600">
+                                        ⚠️ {item.missingCommodities} missing
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-xs space-y-1 max-w-xs">
+                                    {Object.entries(item.commodities).map(([commodity, volume]) => (
+                                      <div key={commodity} className="flex justify-between">
+                                        <span className="text-gray-600">{commodity}:</span>
+                                        <span className="font-medium text-gray-900">{volume.toFixed(2)} Kg</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Summary Footer */}
+                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                      <div className="grid grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Total Weeks:</span>
+                          <span className="ml-2 font-bold text-gray-900">{analyzeVolumeData.length}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Volume:</span>
+                          <span className="ml-2 font-bold text-blue-700">
+                            {analyzeVolumeData.reduce((sum, item) => sum + item.totalVolume, 0).toFixed(2)} Kg
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Complete Weeks:</span>
+                          <span className="ml-2 font-bold text-green-600">
+                            {analyzeVolumeData.filter(item => item.completeness === 100).length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Incomplete Weeks:</span>
+                          <span className="ml-2 font-bold text-yellow-600">
+                            {analyzeVolumeData.filter(item => item.completeness < 100).length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Forecast Generated Yet</h3>
-                    <p className="text-gray-600">Select forecast parameters and click "Generate" to see predictions</p>
+                )}
+
+                {/* PRICE DATA TABLE */}
+                {overviewDataView === 'price' && analyzePriceData && (
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-4 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-green-100 p-2 rounded-lg">
+                            <span className="text-xl text-green-600">💰</span>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900">Price Data by Week (LP/HP/AP)</h3>
+                            <p className="text-sm text-gray-600">Lowest, Highest, and Average prices with completeness tracking</p>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {analyzePriceData.length} weeks • {overviewYearFilter === 'all' ? 'All years' : overviewYearFilter}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month/Year</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week LP (₱)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week HP (₱)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week AP (₱)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completeness</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodity Details</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {analyzePriceData.map((item, idx) => {
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const isComplete = item.completeness === 100;
+                            
+                            return (
+                              <tr key={idx} className={`hover:bg-green-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {item.week_label || `Week ${item.week}, ${monthNames[item.month - 1]} ${item.year}`}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    W{item.week}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{monthNames[item.month - 1]} {item.year}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-sm font-bold text-red-600">₱{item.weekLowest?.toFixed(2) || 'N/A'}</span>
+                                    <span className="text-xs text-gray-400">LP</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-sm font-bold text-emerald-600">₱{item.weekHighest?.toFixed(2) || 'N/A'}</span>
+                                    <span className="text-xs text-gray-400">HP</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-sm font-bold text-green-700">₱{item.weekAverage?.toFixed(2) || 'N/A'}</span>
+                                    <span className="text-xs text-gray-400">AP</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                                        <div 
+                                          className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                          style={{ width: `${item.completeness}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className={`text-xs font-bold ${isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
+                                        {item.completeness.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                      {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.commodities.length : 1}
+                                    </div>
+                                    {!isComplete && (
+                                      <div className="text-xs text-yellow-600">
+                                        ⚠️ {item.missingCommodities} missing
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-xs space-y-2 max-w-sm">
+                                    {Object.entries(item.commodities).map(([commodity, prices]) => (
+                                      <div key={commodity} className="border-l-2 border-green-200 pl-2">
+                                        <div className="font-medium text-gray-900 mb-1">{commodity}</div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <div>
+                                            <span className="text-gray-500">LP:</span>
+                                            <span className="ml-1 text-red-600 font-medium">₱{prices.lowest.toFixed(2)}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">HP:</span>
+                                            <span className="ml-1 text-emerald-600 font-medium">₱{prices.highest.toFixed(2)}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">AP:</span>
+                                            <span className="ml-1 text-green-700 font-medium">₱{prices.average.toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Summary Footer */}
+                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                      <div className="grid grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Total Weeks:</span>
+                          <span className="ml-2 font-bold text-gray-900">{analyzePriceData.length}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Avg Weekly Price:</span>
+                          <span className="ml-2 font-bold text-green-700">
+                            ₱{(analyzePriceData.reduce((sum, item) => sum + (item.weekAverage || 0), 0) / analyzePriceData.length).toFixed(2)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Complete Weeks:</span>
+                          <span className="ml-2 font-bold text-green-600">
+                            {analyzePriceData.filter(item => item.completeness === 100).length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Incomplete Weeks:</span>
+                          <span className="ml-2 font-bold text-yellow-600">
+                            {analyzePriceData.filter(item => item.completeness < 100).length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1663,7 +1576,6 @@ CONFIG = {
                   </div>
                 </div>
 
-                {/* Mixed Chart */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                   <ReactApexChart
                     options={mixedChart.options}
@@ -1673,7 +1585,6 @@ CONFIG = {
                   />
                 </div>
 
-                {/* Stacked Chart */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                   <ReactApexChart
                     options={stackedChart.options}
@@ -1688,7 +1599,6 @@ CONFIG = {
             {/* Comparison Tab */}
             {activeTab === 'comparison' && (
               <div className="space-y-6">
-                {/* Commodity Selection */}
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Commodities to Compare</h3>
                   
@@ -1749,7 +1659,6 @@ CONFIG = {
                   )}
                 </div>
 
-                {/* Bar Chart */}
                 {comparisonCommodities.length > 0 && (
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <ReactApexChart
@@ -1761,7 +1670,6 @@ CONFIG = {
                   </div>
                 )}
 
-                {/* Line Chart */}
                 {comparisonCommodities.length > 0 && (
                   <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <ReactApexChart
@@ -1773,7 +1681,6 @@ CONFIG = {
                   </div>
                 )}
 
-                {/* Empty State */}
                 {comparisonCommodities.length === 0 && (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
                     <div className="text-6xl mb-4">📊</div>
@@ -1784,427 +1691,86 @@ CONFIG = {
               </div>
             )}
 
-            {/* Overview Tab - RESTORED DATA TABLES WITH DATE FORMATTING */}
-            {activeTab === 'overview' && (
-              <div className="space-y-8">
-                {/* Volume Data Table */}
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-blue-100 p-2 rounded-lg">
-                          <span className="text-xl text-blue-600">📦</span>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">Volume Data</h3>
-                          <p className="text-sm text-gray-600">All commodity volume records (in Kg)</p>
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Total Records: {dashboardData.volume_data.length}
-                      </div>
+            {/* Forecast Tab */}
+            {activeTab === 'forecast' && (
+              <div>
+                {forecastResult ? (
+                  <div className="space-y-6">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={exportForecastToCSV}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-2"
+                      >
+                        <span>📥</span>
+                        <span>Export CSV</span>
+                      </button>
                     </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Commodity
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date Period
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Week
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Month
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Year
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Volume (Kg)
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date Details
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {dashboardData.volume_data.slice(0, 20).map((item, idx) => {
-                          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                              'July', 'August', 'September', 'October', 'November', 'December'];
-                          const monthName = monthNames[item.month - 1];
-                          const dateLabel = `${monthName} ${item.year}`;
-                          
-                          return (
-                            <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="ml-0">
-                                    <div className="text-sm font-medium text-gray-900">{item.commodity}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {item.week_label || `Week ${item.week}, ${monthName} ${item.year}`}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                                  Week {item.week}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-blue-600">{monthName}</span>
-                                    <span className="text-gray-400">•</span>
-                                    <span className="text-gray-500 text-xs">M{item.month}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-semibold text-gray-900">{item.year}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <div className="text-sm font-bold text-blue-700">{item.volume.toFixed(2)}</div>
-                                  <span className="text-xs text-gray-500">Kg</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-xs text-gray-500">
-                                  <div>Full Date: {monthName} {item.year}</div>
-                                  <div>Week {item.week} of {item.year}</div>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {dashboardData.volume_data.length > 20 && (
-                      <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-center">
-                        <p className="text-sm text-gray-500">
-                          Showing 20 of {dashboardData.volume_data.length} records
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Price Data Table */}
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                  <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-green-100 p-2 rounded-lg">
-                          <span className="text-xl text-green-600">💰</span>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">Price Data</h3>
-                          <p className="text-sm text-gray-600">All commodity price records (in ₱)</p>
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Total Records: {dashboardData.price_data.length}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Commodity
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date Period
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Week
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Month
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Year
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Price Details (₱)
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Price Range
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {dashboardData.price_data.slice(0, 20).map((item, idx) => {
-                          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                              'July', 'August', 'September', 'October', 'November', 'December'];
-                          const monthName = monthNames[item.month - 1];
-                          const dateLabel = `${monthName} ${item.year}`;
-                          const priceRange = item.highest_price - item.lowest_price;
-                          const avgPosition = ((item.average_price - item.lowest_price) / (priceRange || 1)) * 100;
-                          
-                          return (
-                            <tr key={idx} className="hover:bg-green-50/30 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="ml-0">
-                                    <div className="text-sm font-medium text-gray-900">{item.commodity}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {item.week_label || `Week ${item.week}, ${monthName} ${item.year}`}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                  Week {item.week}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-green-600">{monthName}</span>
-                                    <span className="text-gray-400">•</span>
-                                    <span className="text-gray-500 text-xs">M{item.month}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-semibold text-gray-900">{item.year}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-500">Average:</span>
-                                    <span className="text-sm font-bold text-green-700">₱{item.average_price.toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-500">Low:</span>
-                                    <span className="text-xs text-red-600">₱{item.lowest_price.toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-500">High:</span>
-                                    <span className="text-xs text-emerald-600">₱{item.highest_price.toFixed(2)}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500 mb-1">Range: ₱{priceRange.toFixed(2)}</div>
-                                  <div className="w-32 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className="bg-gradient-to-r from-red-400 via-yellow-400 to-emerald-500 h-2 rounded-full relative"
-                                      style={{ width: '100%' }}
-                                    >
-                                      <div 
-                                        className="absolute w-1 h-3 bg-gray-800 rounded-full -mt-0.5"
-                                        style={{ left: `${avgPosition}%` }}
-                                        title={`Average: ₱${item.average_price.toFixed(2)}`}
-                                      ></div>
-                                    </div>
-                                  </div>
-                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>₱{item.lowest_price.toFixed(0)}</span>
-                                    <span>₱{item.highest_price.toFixed(0)}</span>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {dashboardData.price_data.length > 20 && (
-                      <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-center">
-                        <p className="text-sm text-gray-500">
-                          Showing 20 of {dashboardData.price_data.length} records
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Date Range Summary */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <span className="text-2xl">📅</span>
-                      Date Range Summary
-                    </h4>
-                    <div className="space-y-4">
-                      {(() => {
-                        const allYears = [...new Set([...dashboardData.volume_data.map(d => d.year), ...dashboardData.price_data.map(d => d.year)])];
-                        const sortedYears = allYears.sort((a, b) => a - b);
-                        
-                        if (sortedYears.length === 0) return null;
-                        
-                        const earliestYear = sortedYears[0];
-                        const latestYear = sortedYears[sortedYears.length - 1];
-                        
-                        return (
+                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">📈 Performance Metrics</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {forecastResult.metrics.rmse !== undefined && (
                           <>
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-600">Data Coverage</span>
-                              <span className="font-bold text-blue-600">
-                                {sortedYears.length} {sortedYears.length === 1 ? 'Year' : 'Years'}
-                              </span>
+                            <div>
+                              <p className="text-sm text-gray-600">RMSE</p>
+                              <p className="text-xl font-bold">{forecastResult.metrics.rmse.toFixed(2)}</p>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-600">Earliest Year</span>
-                              <span className="font-bold text-gray-900">{earliestYear}</span>
+                            <div>
+                              <p className="text-sm text-gray-600">MAE</p>
+                              <p className="text-xl font-bold">{forecastResult.metrics.mae.toFixed(2)}</p>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-600">Latest Year</span>
-                              <span className="font-bold text-gray-900">{latestYear}</span>
+                            <div>
+                              <p className="text-sm text-gray-600">MAPE</p>
+                              <p className="text-xl font-bold">{forecastResult.metrics.mape.toFixed(2)}%</p>
                             </div>
-                            <div className="pt-3 border-t border-gray-200">
-                              <div className="text-sm text-gray-600 mb-2">Years with Data:</div>
-                              <div className="flex flex-wrap gap-2">
-                                {sortedYears.map(year => (
-                                  <span key={year} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                    {year}
-                                  </span>
-                                ))}
-                              </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Accuracy</p>
+                              <p className="text-xl font-bold text-green-600">{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
                             </div>
                           </>
-                        );
-                      })()}
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Month Distribution */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <span className="text-2xl">📊</span>
-                      Month Distribution
-                    </h4>
-                    <div className="space-y-3">
-                      {(() => {
-                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                        const monthCounts = Array(12).fill(0);
-                        
-                        dashboardData.volume_data.forEach(item => {
-                          if (item.month >= 1 && item.month <= 12) {
-                            monthCounts[item.month - 1]++;
-                          }
-                        });
-                        
-                        const maxCount = Math.max(...monthCounts);
-                        
-                        return monthCounts.map((count, index) => (
-                          <div key={index} className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-700">{monthNames[index]}</span>
-                              <span className="text-sm font-medium text-gray-900">{count} records</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-gradient-to-r from-blue-400 to-purple-500 h-2 rounded-full"
-                                style={{ width: `${(count / maxCount) * 100}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        ));
-                      })()}
+                    <div>
+                      <ReactApexChart
+                        options={forecastChart.options}
+                        series={forecastChart.series}
+                        type="line"
+                        height={400}
+                      />
                     </div>
-                  </div>
 
-                  {/* Commodities Summary */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <span className="text-2xl">🥬</span>
-                      Commodities Summary
-                    </h4>
-                    <div className="space-y-4">
-                      <div className="space-y-3">
-                        {dashboardData.commodities.map((commodity, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                                <span className="text-blue-600 font-bold">{commodity.charAt(0)}</span>
-                              </div>
-                              <span className="font-medium text-gray-900">{commodity}</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold text-gray-900">
-                                {dashboardData.volume_data.filter(item => item.commodity === commodity).length} records
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {dashboardData.price_data.filter(item => item.commodity === commodity).length} price entries
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="pt-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Total Commodities</span>
-                          <span className="font-bold text-purple-600">{dashboardData.commodities.length}</span>
-                        </div>
-                      </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {forecastResult.forecast_data.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {formatPeriod(item, forecastResult.forecast_mode || 'weekly')}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {item.value.toFixed(2)} {forecastResult.data_type === 'price' ? '₱' : 'Kg'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                </div>
-
-                {/* Quick Filters */}
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Quick Filters</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
-                      <div className="flex flex-wrap gap-2">
-                        {(() => {
-                          const allYears = [...new Set([...dashboardData.volume_data.map(d => d.year), ...dashboardData.price_data.map(d => d.year)])];
-                          const sortedYears = allYears.sort((a, b) => b - a);
-                          
-                          return sortedYears.slice(0, 5).map(year => (
-                            <button
-                              key={year}
-                              className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                            >
-                              {year}
-                            </button>
-                          ));
-                        })()}
-                        <button className="px-3 py-1 bg-blue-100 text-blue-700 border border-blue-300 rounded-lg text-sm hover:bg-blue-200 transition-colors">
-                          All Years
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Commodity</label>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <option value="">All Commodities</option>
-                        {dashboardData.commodities.map(commodity => (
-                          <option key={commodity} value={commodity}>{commodity}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
-                      <div className="flex gap-2">
-                        <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium">
-                          Volume Data
-                        </button>
-                        <button className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium">
-                          Price Data
-                        </button>
-                      </div>
-                    </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">📊</div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Forecast Generated Yet</h3>
+                    <p className="text-gray-600">Select forecast parameters and click "Generate" to see predictions</p>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

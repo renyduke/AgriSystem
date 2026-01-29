@@ -393,7 +393,7 @@ const Farmer = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+              <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <FaSearch className="mr-2 text-gray-400" />
                 Search Farmers
               </label>
@@ -409,11 +409,11 @@ const Farmer = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+              <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <FaFilter className="mr-2 text-gray-400" />
                 Filter by Location
               </label>
-              <select
+              <select 
                 value={locationFilter}
                 onChange={(e) => setLocationFilter(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
