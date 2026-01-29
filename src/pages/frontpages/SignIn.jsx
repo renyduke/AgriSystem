@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "next/router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -7,6 +8,7 @@ import { FaSpinner, FaCheckCircle, FaTimes, FaEnvelope, FaLock } from "react-ico
 import logo from "/logo.png";
 
 export function SignIn() {
+  const router = useRouter();
   const [passwordShown, setPasswordShown] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,21 +40,23 @@ export function SignIn() {
 
         setLocalReply({ type: "success", message: "Login successful!" });
         
-        // Redirect based on position
+        // Redirect based on position using Next.js router
         setTimeout(() => {
           if (position === "admin") {
-            window.location.href = "/home";
+            router.push("/home");
           } else if (position === "user") {
-            window.location.href = "/user";
+            router.push("/user");
           } else {
             setError("Invalid user position. Contact support.");
             setLocalReply({ type: "error", message: "Invalid user position" });
+            setLoading(false);
           }
         }, 1500);
       } else {
         setError("User data not found. Please contact support.");
         setLocalReply({ type: "error", message: "User data not found" });
         setTimeout(() => setLocalReply(null), 3000);
+        setLoading(false);
       }
     } catch (error) {
       console.error("Login error:", error.message);
@@ -72,17 +76,16 @@ export function SignIn() {
       setError(errorMessage);
       setLocalReply({ type: "error", message: errorMessage });
       setTimeout(() => setLocalReply(null), 3000);
-    } finally {
       setLoading(false);
     }
   };
 
   const navigateToForgotPassword = () => {
-    window.location.href = "/forgot-password";
+    router.push("/forgot-password");
   };
 
   const navigateToSignUp = () => {
-    window.location.href = "/signup";
+    router.push("/signup");
   };
 
   return (
@@ -146,7 +149,7 @@ export function SignIn() {
           )}
 
           {/* Sign In Form */}
-          <div className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Input */}
             <div className="relative">
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -234,8 +237,7 @@ export function SignIn() {
 
             {/* Submit Button */}
             <button
-              type="button"
-              onClick={handleSubmit}
+              type="submit"
               className={`w-full py-3.5 px-6 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 transform ${
                 loading
                   ? "bg-gray-400 cursor-not-allowed"
@@ -257,7 +259,7 @@ export function SignIn() {
                 </span>
               )}
             </button>
-          </div>
+          </form>
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200">
@@ -278,64 +280,57 @@ export function SignIn() {
         <div className="absolute -bottom-2 -left-2 w-24 h-24 bg-green-200 rounded-full opacity-20 blur-2xl"></div>
         <div className="absolute -top-2 -right-2 w-32 h-32 bg-emerald-200 rounded-full opacity-20 blur-2xl"></div>
       </div>
+
+      {/* Custom CSS Animations */}
+      <style jsx>{`
+        @keyframes blob {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        @keyframes slideInRight {
+          0% { opacity: 0; transform: translateX(100px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.2; }
+          50% { opacity: 0.3; }
+        }
+
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+
+        .animate-slide-in-right {
+          animation: slideInRight 0.4s ease-out;
+        }
+
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
+
+        .animate-pulse-slow {
+          animation: pulse-slow 3s ease-in-out infinite;
+        }
+      `}</style>
     </section>
   );
-}
-
-// Custom CSS Animations
-const styles = `
-  @keyframes blob {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
-  }
-
-  @keyframes slideInRight {
-    0% { opacity: 0; transform: translateX(100px); }
-    100% { opacity: 1; transform: translateX(0); }
-  }
-
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
-  }
-
-  @keyframes pulse-slow {
-    0%, 100% { opacity: 0.2; }
-    50% { opacity: 0.3; }
-  }
-
-  .animate-blob {
-    animation: blob 7s infinite;
-  }
-
-  .animation-delay-2000 {
-    animation-delay: 2s;
-  }
-
-  .animation-delay-4000 {
-    animation-delay: 4s;
-  }
-
-  .animate-slide-in-right {
-    animation: slideInRight 0.4s ease-out;
-  }
-
-  .animate-shake {
-    animation: shake 0.5s ease-in-out;
-  }
-
-  .animate-pulse-slow {
-    animation: pulse-slow 3s ease-in-out infinite;
-  }
-`;
-
-// Inject styles
-if (typeof document !== "undefined") {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
 }
 
 export default SignIn;
