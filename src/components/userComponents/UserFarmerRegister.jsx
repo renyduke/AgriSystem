@@ -19,15 +19,15 @@ const FarmerRegister = () => {
     farmBarangay: "",
     farmSitio: "",
     hectares: "",
-    season: "Default",
-    landOwnership: "", // Added Land Ownership
+    areaInSqm: "", // Added for calculation
+    landOwnership: "",
     mainCrops: [],
     area: [],
     coordinates: [10.3860, 123.2220],
   });
   const [selectedAddressBarangay, setSelectedAddressBarangay] = useState("");
   const [selectedFarmBarangay, setSelectedFarmBarangay] = useState("");
-  const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "" }); // Removed harvestDate
+  const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "" });
   const [error, setError] = useState("");
   const [vegetables, setVegetables] = useState([]);
   const [loadingVegetables, setLoadingVegetables] = useState(false);
@@ -85,8 +85,15 @@ const FarmerRegister = () => {
     setFarmerData((prevData) => {
       let updatedValue = value;
 
+      // Only allow letters and spaces for first/last name
       if (name === "firstName" || name === "lastName") {
-        updatedValue = capitalizeFirstLetter(value);
+        updatedValue = value.replace(/[^A-Za-z\s]/g, "");
+        updatedValue = capitalizeFirstLetter(updatedValue);
+      }
+
+      // Only allow numbers for age
+      if (name === "age") {
+        updatedValue = value.replace(/[^0-9]/g, "");
       }
 
       if (name === "contact") {
@@ -95,6 +102,13 @@ const FarmerRegister = () => {
 
       if (name === "hectares") {
         updatedValue = value >= 0 ? value : "";
+        // Calculate square meters (1 hectare = 10,000 sqm)
+        if (updatedValue) {
+          const sqm = parseFloat(updatedValue) * 10000;
+          setFarmerData((prev) => ({ ...prev, areaInSqm: sqm.toFixed(2) }));
+        } else {
+          setFarmerData((prev) => ({ ...prev, areaInSqm: "" }));
+        }
       }
 
       const updatedData = { ...prevData, [name]: updatedValue };
@@ -247,6 +261,7 @@ const FarmerRegister = () => {
         address: `${farmerData.addressBarangay}, ${farmerData.addressSitio}, Canlaon City`,
         farmLocation: `${farmerData.farmBarangay}, ${farmerData.farmSitio}, Canlaon City`,
         hectares: parseFloat(farmerData.hectares),
+        areaInSqm: parseFloat(farmerData.areaInSqm),
         landOwnership: farmerData.landOwnership,
         mainCrops: flattenedCrops,
         area: farmerData.area,
@@ -275,7 +290,7 @@ const FarmerRegister = () => {
         farmBarangay: "",
         farmSitio: "",
         hectares: "",
-        season: "Default",
+        areaInSqm: "",
         landOwnership: "",
         mainCrops: [],
         area: [],
@@ -321,6 +336,7 @@ const FarmerRegister = () => {
                 placeholder="First Name"
                 value={farmerData.firstName}
                 onChange={handleChange}
+                title="First name should only contain letters"
                 className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
                 required
               />
@@ -333,6 +349,7 @@ const FarmerRegister = () => {
                 placeholder="Last Name"
                 value={farmerData.lastName}
                 onChange={handleChange}
+                title="Last name should only contain letters"
                 className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
                 required
               />
@@ -341,12 +358,12 @@ const FarmerRegister = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
-              type="number"
+              type="text"
               name="age"
               placeholder="Age"
               value={farmerData.age}
               onChange={handleChange}
-              min="0"
+              title="Age should only contain numbers"
               className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
               required
             />
@@ -440,32 +457,24 @@ const FarmerRegister = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="number"
-              name="hectares"
-              placeholder="Farm Size (Hectares)"
-              value={farmerData.hectares}
-              onChange={handleChange}
-              min="0"
-              step="0.01"
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            />
-            <select
-              name="season"
-              value={farmerData.season}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            >
-              <option value="Default">Select Season</option>
-              <option value="Dry">Dry</option>
-              <option value="Wet">Wet</option>
-            </select>
-          </div>
-
-          {/* Removed farmType field */}
-          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <input
+                type="number"
+                name="hectares"
+                placeholder="Farm Size (Hectares)"
+                value={farmerData.hectares}
+                onChange={handleChange}
+                min="0"
+                step="0.01"
+                className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                required
+              />
+              {farmerData.areaInSqm && (
+                <p className="text-sm text-gray-600 mt-1 ml-1">
+                  ≈ {farmerData.areaInSqm} square meters
+                </p>
+              )}
+            </div>
             <select
               name="landOwnership"
               value={farmerData.landOwnership}

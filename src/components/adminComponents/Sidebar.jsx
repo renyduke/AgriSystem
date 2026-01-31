@@ -203,6 +203,50 @@ const Sidebar = () => {
                       </NavLink>
                     </motion.li>
 
+                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+                      <NavLink
+                        to="/home/price"
+                        className={({ isActive }) =>
+                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <motion.div
+                            variants={itemVariants}
+                            animate={isActive ? "active" : "initial"}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
+                            </svg>
+                            <span className="text-xs">Price</span>
+                          </motion.div>
+                        )}
+                      </NavLink>
+                    </motion.li>
+
+                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+                      <NavLink
+                        to="/home/volume"
+                        className={({ isActive }) =>
+                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <motion.div
+                            variants={itemVariants}
+                            animate={isActive ? "active" : "initial"}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
+                            </svg>
+                            <span className="text-xs">Volume</span>
+                          </motion.div>
+                        )}
+                      </NavLink>
+                    </motion.li>
+
                     {/* V&P Results */}
                     <motion.li variants={itemVariants} initial="initial" whileHover="hover">
                       <NavLink

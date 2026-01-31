@@ -22,6 +22,8 @@ import DamageReport from "./pages/AdminPages/Damage Report";
 import Drawmap from "./pages/AdminPages/DrawMap";
 import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 import Dashboard from "./pages/AdminPages/Dashboard";
+import VolumePage from "./pages/AdminPages/VolumePage";
+import PricePage from "./pages/AdminPages/PricePage";
 
 function App() {
   return (
@@ -58,6 +60,8 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />
           <Route path="dashboard" element={<Dashboard />} />
+           <Route path="volume" element={<VolumePage />} />
+            <Route path="price" element={<PricePage />} />
         </Route>
 
         {/* Root-level Farmer Profile Route (optional, for non-admin access) */}
