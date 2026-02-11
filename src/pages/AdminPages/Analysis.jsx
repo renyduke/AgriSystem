@@ -5,7 +5,8 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { db } from "../../config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
-import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt } from "react-icons/fa";
+import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt, FaFilter, FaDownload, FaCalendarAlt } from "react-icons/fa";
+import Loading from "../../components/Loading";
 
 // Fix Leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -149,289 +150,305 @@ const AgriDashboard = () => {
     }
   };
 
-  const handleSwipe = (direction) => {
-    setCurrentFarmerIndex(prev => {
-      if (direction === 'next') {
-        return prev === farmersData.length - 1 ? 0 : prev + 1;
-      } else {
-        return prev === 0 ? farmersData.length - 1 : prev - 1;
-      }
-    });
-  };
-
-  const handleTouchStart = (e) => {
-    startX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e) => {
-    if (!startX.current) return;
-    const diff = e.touches[0].clientX - startX.current;
-    if (Math.abs(diff) > 50) {
-      handleSwipe(diff > 0 ? 'prev' : 'next');
-      startX.current = null;
-    }
-  };
-
   const currentFarmer = farmersData[currentFarmerIndex] || {};
 
-  // ApexCharts Options
-  const cropTrendsOptions = {
-    chart: { type: 'bar', toolbar: { show: true }, animations: { enabled: true } },
-    colors: COLORS,
-    plotOptions: { bar: { borderRadius: 8, distributed: true } },
+  // Common Chart Options
+  const commonChartOptions = {
+    chart: {
+      toolbar: {
+        show: true,
+        tools: {
+          download: true,
+          selection: true,
+          zoom: true,
+          zoomin: true,
+          zoomout: true,
+          pan: true,
+          reset: true
+        },
+      },
+      background: 'transparent',
+      fontFamily: 'Inter, sans-serif'
+    },
+    theme: { mode: 'light' },
     dataLabels: { enabled: false },
-    xaxis: { categories: farmerCropTrends.map(item => item.name), labels: { rotate: -45, style: { fontSize: '12px' } } },
-    yaxis: { title: { text: 'Number of Farmers' } },
-    title: { text: 'Farmer Crop Trends 🌾', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
+    grid: { borderColor: '#f3f4f6', strokeDashArray: 4 },
+  };
+
+  const cropTrendsOptions = {
+    ...commonChartOptions,
+    chart: { type: 'bar' },
+    colors: COLORS,
+    plotOptions: {
+      bar: {
+        borderRadius: 6,
+        distributed: true,
+        columnWidth: '60%'
+      }
+    },
+    xaxis: {
+      categories: farmerCropTrends.map(item => item.name),
+      labels: { style: { fontSize: '12px', colors: '#64748b' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false }
+    },
+    yaxis: {
+      title: { text: undefined }, // Removed Y-axis title for cleaner look
+      labels: { style: { colors: '#64748b' } }
+    },
     legend: { show: false },
   };
 
   const prodTrendsOptions = {
-    chart: { type: 'line', toolbar: { show: true }, animations: { enabled: true } },
+    ...commonChartOptions,
+    chart: { type: 'area' },
     colors: ['#10b981'],
     stroke: { curve: 'smooth', width: 3 },
-    markers: { size: 6 },
-    xaxis: { categories: highDemandVeggies.map(item => item.name) },
-    yaxis: { title: { text: 'Quantity (ha)' } },
-    title: { text: 'Vegetable Production Trends 📈', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.7,
+        opacityTo: 0.2,
+        stops: [0, 90, 100]
+      }
+    },
+    xaxis: {
+      categories: highDemandVeggies.map(item => item.name),
+      labels: { style: { colors: '#64748b' } }
+    },
+    yaxis: { labels: { style: { colors: '#64748b' } } },
   };
 
   const topFarmersOptions = {
-    chart: { type: 'bar', toolbar: { show: true }, animations: { enabled: true } },
-    colors: COLORS,
-    plotOptions: { bar: { borderRadius: 8, distributed: true, horizontal: false } },
-    dataLabels: { enabled: false },
-    xaxis: { categories: topProducingFarmers.map(item => item.name), labels: { rotate: -45, style: { fontSize: '12px' } } },
-    yaxis: { title: { text: 'Production (ha)' } },
-    title: { text: 'Top Producing Farmers 🏆', align: 'left', style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' } },
-    legend: { show: false },
+    ...commonChartOptions,
+    chart: { type: 'bar' },
+    colors: ['#3b82f6'],
+    plotOptions: {
+      bar: {
+        borderRadius: 4,
+        horizontal: true,
+        barHeight: '60%'
+      }
+    },
+    xaxis: {
+      categories: topProducingFarmers.map(item => item.name),
+      labels: { style: { colors: '#64748b' } }
+    },
+    yaxis: { labels: { style: { colors: '#64748b', fontSize: '13px', fontWeight: 500 } } },
   };
 
   const landOwnershipOptions = {
-    chart: { type: 'donut', animations: { enabled: true } },
+    ...commonChartOptions,
+    chart: { type: 'donut' },
     labels: landOwnershipDistribution.map(item => item.ownership),
     colors: COLORS,
-    title: { 
-      text: 'Land Ownership Distribution',
-      align: 'left',
-      style: { fontSize: '18px', fontWeight: 'bold', color: '#166534' }
-    },
-    legend: { position: 'bottom' },
+    legend: { position: 'bottom', fontSize: '13px', markers: { radius: 12 } },
+    stroke: { show: false },
+    plotOptions: { pie: { donut: { size: '65%' } } }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center">
-        <div className="text-center">
-          <FaSpinner className="text-6xl text-green-600 animate-spin mx-auto mb-4" />
-          <p className="text-green-800 font-semibold text-lg">Loading agricultural data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md text-center border-4 border-red-200">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-red-800 mb-2">Error Loading Data</h2>
-          <p className="text-red-600">{error}</p>
-        </div>
-      </div>
-    );
+    return <Loading />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 border border-white/50">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl shadow-lg">
-              <FaSeedling className="text-white text-3xl" />
+    <div className="min-h-screen bg-gray-50 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Analytics Dashboard</h1>
+            <p className="text-gray-500 mt-1">Real-time insights on Canlaon's agricultural landscape</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+              <FaCalendarAlt className="mr-2 text-gray-400" />
+              This Month
+            </button>
+            <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+              <FaFilter className="mr-2 text-gray-400" />
+              Filter
+            </button>
+            <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm">
+              <FaDownload className="mr-2" />
+              Export
+            </button>
+          </div>
+        </header>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title="Total Farmers" value={totalFarmers} icon={<FaUser />} color="text-blue-600" bg="bg-blue-50" />
+          <StatCard title="Crop Varieties" value={totalVegetables} icon={<FaLeaf />} color="text-green-600" bg="bg-green-50" />
+          <StatCard title="Total Hectares" value={totalProduction.toFixed(1)} unit="ha" icon={<FaMapMarkedAlt />} color="text-amber-600" bg="bg-amber-50" />
+          <StatCard title="Avg Farm Size" value={averageFarmSize} unit="ha" icon={<FaChartPie />} color="text-purple-600" bg="bg-purple-50" />
+        </div>
+
+        {/* Charts Section - Row 1 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Production Trends (Main Chart - spans 2 cols) */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <FaChartLine className="text-green-600 text-lg" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800">Production Yield Trends</h2>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                Agricultural Dashboard
-              </h1>
-              <p className="text-gray-600 text-sm mt-1">Comprehensive farming analytics for Canlaon City</p>
-            </div>
+            <ReactApexChart options={prodTrendsOptions} series={[{ name: 'Production (ha)', data: highDemandVeggies.map(item => item.value) }]} type="area" height={350} />
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatCard title="Total Farmers" value={totalFarmers} icon="👨‍🌾" color="from-green-400 to-emerald-500" />
-            <StatCard title="Vegetable Types" value={totalVegetables} icon="🥬" color="from-blue-400 to-cyan-500" />
-            <StatCard title="Total Production" value={`${totalProduction.toFixed(1)} ha`} icon="📏" color="from-yellow-400 to-orange-500" />
-            <StatCard title="Avg Farm Size" value={`${averageFarmSize} ha`} icon="📊" color="from-purple-400 to-pink-500" />
+          {/* Land Ownership (Donut Chart) */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-purple-50 rounded-lg">
+                <FaChartPie className="text-purple-600 text-lg" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Land Ownership</h2>
+            </div>
+            <div className="flex items-center justify-center h-[300px]">
+              <ReactApexChart options={landOwnershipOptions} series={landOwnershipDistribution.map(item => item.count)} type="donut" width="100%" />
+            </div>
           </div>
         </div>
 
+        {/* Charts Section - Row 2 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Top Farmers */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <FaTractor className="text-blue-600 text-lg" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Top Producers</h2>
+            </div>
+            <ReactApexChart options={topFarmersOptions} series={[{ name: 'Hectares', data: topProducingFarmers.map(item => item.production) }]} type="bar" height={320} />
+          </div>
+
+          {/* Crop Popularity */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-orange-50 rounded-lg">
+                <FaSeedling className="text-orange-600 text-lg" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Crop Popularity</h2>
+            </div>
+            <ReactApexChart options={cropTrendsOptions} series={[{ name: 'Farmers', data: farmerCropTrends.map(item => item.count) }]} type="bar" height={320} />
+          </div>
+        </div>
+
+        {/* Map & Information Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content - Left 2 Columns */}
-          <div className="lg:col-span-2 space-y-6">
+
+          {/* Production Map (spans 2 cols) */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-50 rounded-lg">
+                  <FaMapMarkedAlt className="text-red-600 text-lg" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800">Production Zones</h2>
+              </div>
+              <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-1 rounded-md">Live View</span>
+            </div>
+            <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-100 relative z-0">
+              <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {farmersData
+                  .filter((farm) => farm.coordinates && farm.coordinates.length === 2)
+                  .map((farm) => (
+                    <Marker key={farm.id} position={farm.coordinates} icon={redIcon}>
+                      <Popup>
+                        <div className="p-1">
+                          <strong className="block text-sm text-gray-900">{farm.name}</strong>
+                          <span className="text-xs text-gray-500">{farm.farmBarangay} • {farm.vegetable}</span>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+              </MapContainer>
+            </div>
+          </div>
+
+          {/* Sidebar Area */}
+          <div className="space-y-6">
+
+            {/* Key Insights */}
+            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
+              <div className="flex items-center gap-3 mb-4 border-b border-green-400 pb-3">
+                <FaChartBar className="text-green-100 text-lg" />
+                <h2 className="text-lg font-bold">Key Insights</h2>
+              </div>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-200 mt-2 flex-shrink-0" />
+                  <p className="text-green-50 text-sm leading-relaxed">
+                    <strong className="text-white">{totalFarmers} active farmers</strong> are currently cultivating {totalVegetables} distinct vegetable types.
+                  </p>
+                </li>
+                {highDemandVeggies.length > 0 && (
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-200 mt-2 flex-shrink-0" />
+                    <p className="text-green-50 text-sm leading-relaxed">
+                      <strong className="text-white">{highDemandVeggies[0].name}</strong> dominates production with {highDemandVeggies[0].value.toFixed(1)} ha planted.
+                    </p>
+                  </li>
+                )}
+                {productionByBarangay.length > 0 && (
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-200 mt-2 flex-shrink-0" />
+                    <p className="text-green-50 text-sm leading-relaxed">
+                      <strong className="text-white">{productionByBarangay[0].name}</strong> is the top producing barangay this season.
+                    </p>
+                  </li>
+                )}
+              </ul>
+            </div>
+
             {/* Recent Activities */}
-            <DashboardCard title="Recent Activities" icon={<FaTractor />}>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <FaTractor className="text-gray-400" /> Recent Activity
+              </h3>
+              <div className="space-y-4">
                 {recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl hover:from-green-100 hover:to-emerald-100 transition-all">
-                    <div className="flex items-center space-x-3">
+                  <div key={activity.id} className="flex items-start gap-3 pb-3 border-b border-gray-50 last:border-0 last:pb-0">
+                    <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
                       {getActivityIcon(activity.type)}
-                      <span className="font-medium text-gray-800">{activity.name}</span>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {new Date(activity.timestamp).toLocaleDateString()}
-                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{activity.name}</p>
+                      <p className="text-xs text-gray-500">Updated profile details</p>
+                    </div>
+                    <span className="text-xs text-gray-400 ml-auto">{new Date(activity.timestamp).toLocaleDateString()}</span>
                   </div>
                 ))}
+                {recentActivities.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>}
               </div>
-            </DashboardCard>
+            </div>
 
-            {/* Farmer Crop Trends */}
-            <DashboardCard>
-              <ReactApexChart options={cropTrendsOptions} series={[{ data: farmerCropTrends.map(item => item.count) }]} type="bar" height={320} />
-            </DashboardCard>
-
-            {/* Production Trends */}
-            <DashboardCard>
-              <ReactApexChart options={prodTrendsOptions} series={[{ name: 'Production', data: highDemandVeggies.map(item => item.value) }]} type="line" height={320} />
-            </DashboardCard>
-
-            {/* Top Producing Farmers */}
-            <DashboardCard>
-              <ReactApexChart options={topFarmersOptions} series={[{ data: topProducingFarmers.map(item => item.production) }]} type="bar" height={320} />
-            </DashboardCard>
-          </div>
-
-          {/* Sidebar - Right Column */}
-          <div className="space-y-6">
-            {/* Production Map */}
-            <DashboardCard title="Production Map" icon={<FaMapMarkedAlt />}>
-              <div className="h-64 rounded-xl overflow-hidden border-2 border-gray-200">
-                <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  {farmersData
-                    .filter((farm) => farm.coordinates && farm.coordinates.length === 2)
-                    .map((farm) => (
-                      <Marker key={farm.id} position={farm.coordinates} icon={redIcon}>
-                        <Popup>
-                          <div className="p-2">
-                            <h3 className="font-bold text-green-700">{farm.name}</h3>
-                            <p className="text-xs"><strong>Barangay:</strong> {farm.farmBarangay || "Unknown"}</p>
-                            <p className="text-xs"><strong>Production:</strong> {farm.hectares || 0} ha</p>
-                            <p className="text-xs"><strong>Crop:</strong> {farm.vegetable}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ))}
-                </MapContainer>
-              </div>
-            </DashboardCard>
-
-            {/* Land Ownership Distribution */}
-            <DashboardCard title="Land Ownership" icon={<FaChartPie />}>
-              <ReactApexChart
-                options={landOwnershipOptions}
-                series={landOwnershipDistribution.map(item => item.count)}
-                type="donut"
-                height={280}
-              />
-            </DashboardCard>
-
-            {/* Farmer Profile Carousel */}
-            <DashboardCard title="Farmer Profile" icon={<FaUser />}>
-              {farmersData.length > 0 ? (
-                <div
-                  className="relative"
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                >
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border-2 border-green-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <button
-                        onClick={() => handleSwipe('prev')}
-                        className="p-2 bg-white rounded-full shadow-md hover:bg-green-50 transition-all disabled:opacity-30"
-                        disabled={currentFarmerIndex === 0}
-                      >
-                        <FaArrowLeft className="text-green-600" />
-                      </button>
-                      <h3 className="text-lg font-bold text-green-900">{currentFarmer.name}</h3>
-                      <button
-                        onClick={() => handleSwipe('next')}
-                        className="p-2 bg-white rounded-full shadow-md hover:bg-green-50 transition-all disabled:opacity-30"
-                        disabled={currentFarmerIndex === farmersData.length - 1}
-                      >
-                        <FaArrowRight className="text-green-600" />
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <p><strong>Contact:</strong> {currentFarmer.contact || "N/A"}</p>
-                      <p><strong>Barangay:</strong> {currentFarmer.farmBarangay || "Unknown"}</p>
-                      <p><strong>Hectares:</strong> {currentFarmer.hectares || 0} ha</p>
-                      <p><strong>Main Crop:</strong> {currentFarmer.vegetable}</p>
-                      <p><strong>Farm Type:</strong> {currentFarmer.farmType || "N/A"}</p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-4 text-center">
-                      Farmer {currentFarmerIndex + 1} of {farmersData.length}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-6">No farmer data available</p>
-              )}
-            </DashboardCard>
-
-            {/* Overall Analysis */}
-            <DashboardCard title="Overall Analysis" icon={<FaChartLine />}>
-              <div className="space-y-3 text-sm text-gray-700 max-h-64 overflow-y-auto pr-2">
-                <p className="leading-relaxed">
-                  Currently tracking <strong className="text-green-700">{totalFarmers}</strong> registered farmers cultivating <strong className="text-green-700">{totalVegetables}</strong> vegetable types across Canlaon City.
-                </p>
-                <p className="leading-relaxed">
-                  {highDemandVeggies.length > 0 && (
-                    <>Leading crop is <strong className="text-green-700">{highDemandVeggies[0].name}</strong> with {highDemandVeggies[0].value.toFixed(1)} ha of production.</>
-                  )}
-                </p>
-                <p className="leading-relaxed">
-                  {farmerCropTrends.length > 0 && (
-                    <>Most cultivated crop is <strong className="text-green-700">{farmerCropTrends[0].name}</strong> with <strong>{farmerCropTrends[0].count}</strong> farmers involved.</>
-                  )}
-                </p>
-                <p className="leading-relaxed">
-                  {productionByBarangay.length > 0 && (
-                    <>Top producing barangay: <strong className="text-green-700">{productionByBarangay[0].name}</strong> with {productionByBarangay[0].value.toFixed(1)} ha.</>
-                  )}
-                </p>
-              </div>
-            </DashboardCard>
           </div>
         </div>
+
       </div>
     </div>
   );
 };
 
-const DashboardCard = ({ title, children, icon }) => (
-  <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50 hover:shadow-2xl transition-shadow">
-    {title && (
-      <div className="flex items-center gap-2 mb-4">
-        {icon && <span className="text-green-600 text-xl">{icon}</span>}
-        <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+const StatCard = ({ title, value, unit, icon, color, bg }) => (
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start justify-between hover:shadow-md transition-shadow">
+    <div>
+      <p className="text-sm font-medium text-gray-500">{title}</p>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-3xl font-bold text-gray-900">{value}</span>
+        {unit && <span className="text-sm font-medium text-gray-400">{unit}</span>}
       </div>
-    )}
-    {children}
-  </div>
-);
-
-const StatCard = ({ title, value, icon, color }) => (
-  <div className={`bg-gradient-to-br ${color} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}>
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-white/80 text-sm font-medium mb-1">{title}</p>
-        <p className="text-white text-3xl font-bold">{value}</p>
-      </div>
-      <div className="text-5xl opacity-80">{icon}</div>
+    </div>
+    <div className={`p-3 rounded-xl ${bg}`}>
+      <span className={`text-xl ${color}`}>{icon}</span>
     </div>
   </div>
 );

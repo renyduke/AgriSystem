@@ -101,8 +101,8 @@ const Home = () => {
             crops: crops,
             mainCrop: crops.length > 0 ? crops[0].name : "N/A",
             location: farmer.farmLocation || "N/A",
-            coordinates: Array.isArray(farmer.coordinates) && farmer.coordinates.length === 2 
-              ? farmer.coordinates 
+            coordinates: Array.isArray(farmer.coordinates) && farmer.coordinates.length === 2
+              ? farmer.coordinates
               : (farmer.area && Array.isArray(farmer.area) && farmer.area.length >= 2
                 ? [farmer.area[0], farmer.area[1]]
                 : defaultCenter)
@@ -164,7 +164,7 @@ const Home = () => {
         ...doc.data(),
       }));
       setVegetables(vegetablesData);
-      
+
       // Count unique vegetable types
       const uniqueVeggies = new Set(vegetablesData.map(v => v.name));
       setStats(prev => ({ ...prev, totalVegetables: uniqueVeggies.size }));
@@ -175,12 +175,12 @@ const Home = () => {
         const cropName = v.name || 'Unknown';
         cropCounts[cropName] = (cropCounts[cropName] || 0) + 1;
       });
-      
+
       const topCropsList = Object.entries(cropCounts)
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
-      
+
       setTopCrops(topCropsList);
     });
 
@@ -191,14 +191,14 @@ const Home = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/dashboard');
+        const response = await fetch('https://backend-3-fl3e.onrender.com/api/dashboard');
         const data = await response.json();
         setDashboardData(data);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       }
     };
-    
+
     fetchDashboardData();
   }, []);
 
@@ -207,10 +207,10 @@ const Home = () => {
     if (!timestamp) return "Recently";
     const seconds = timestamp.seconds || timestamp._seconds;
     if (!seconds) return "Recently";
-    
+
     const now = Date.now() / 1000;
     const diff = now - seconds;
-    
+
     if (diff < 60) return "Just now";
     if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
@@ -322,212 +322,141 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Minimalist Header */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
-                <FaTractor className="text-white text-lg" />
+    <div className="min-h-screen bg-gray-50/50 pb-12 font-sans">
+      {/* Search Header - Floating & Minimal */}
+      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 mb-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Dashboard
+            </h1>
+            <p className="text-sm text-gray-500">
+              Overview of agricultural activities in Canlaon City.
+            </p>
+          </div>
+
+          <div className="relative w-full md:w-96" ref={searchRef}>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaSearch className="text-gray-400 group-focus-within:text-green-600 transition-colors" />
               </div>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">DA Canlaon</h1>
-                
-              </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleSearchSubmit}
+                placeholder="Search farmers, crops, maps..."
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:bg-white transition-all"
+              />
             </div>
-            <div className="flex items-center space-x-4">
-              {userRole === "admin" && (
-                <div className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium border border-green-100">
-                  Administrator
-                </div>
-              )}
-            </div>
+
+            {/* Search Dropdown - Unchanged Logic, Updated Style */}
+            {isDropdownOpen && suggestions.length > 0 && (
+              <ul className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-96 overflow-y-auto">
+                {suggestions.map((item, index) => {
+                  const Icon = item.icon;
+                  return (
+                    <li
+                      key={`${item.type}-${index}`}
+                      onClick={() => handleSuggestionClick(item)}
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center space-x-3 group transition-colors"
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.type === 'farmer' ? 'bg-green-50 text-green-600' :
+                        item.type === 'vegetable' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                        }`}>
+                        <Icon className="text-sm" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{item.name}</p>
+                        <p className="text-xs text-gray-500">{item.details || item.type}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        {/* Welcome and Search */}
-        <div className="bg-white rounded-xl border border-gray-200 p-8">
-          <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Welcome{userRole === "admin" ? ", Admin" : ""}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {userRole === "admin" 
-                ? "Manage Data and forecasts"
-                : "Access your farming information and resources"}
-            </p>
-            
-            {/* Universal Search Bar */}
-            <div className="max-w-xl" ref={searchRef}>
-              <div className="relative">
-                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:border-green-600 focus-within:ring-1 focus-within:ring-green-100 transition-all">
-                  <FaSearch className="text-gray-400 ml-4 text-sm" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={handleSearchSubmit}
-                    placeholder="Search farmers, crops, locations..."
-                    className="flex-1 px-4 py-3 text-gray-900 bg-transparent outline-none placeholder-gray-400"
-                  />
-                  {search && (
-                    <button
-                      onClick={handleSearchSubmit}
-                      className="px-6 py-3 bg-green-600 text-white font-medium hover:bg-green-700 transition-colors"
-                    >
-                      Search
-                    </button>
-                  )}
-                </div>
-                {isDropdownOpen && suggestions.length > 0 && (
-                  <ul className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
-                    {suggestions.map((item, index) => {
-                      const Icon = item.icon;
-                      return (
-                        <li
-                          key={`${item.type}-${index}`}
-                          onClick={() => handleSuggestionClick(item)}
-                          className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex items-center space-x-3 group"
-                        >
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            item.type === 'farmer' ? 'bg-green-50' : 
-                            item.type === 'vegetable' ? 'bg-amber-50' : 'bg-blue-50'
-                          }`}>
-                            <Icon className={`text-sm ${
-                              item.type === 'farmer' ? 'text-green-600' : 
-                              item.type === 'vegetable' ? 'text-amber-600' : 'text-blue-600'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">{item.name}</p>
-                            <p className="text-xs text-gray-500">{item.details || item.type}</p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+      <div className="max-w-7xl mx-auto px-6 space-y-8">
+
+        {/* Welcome Section - Deleted (Combined into Header) */}
+
+        {/* 1. Key Metrics - Clean & Spacious */}
+        <section>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <FaUsers className="text-6xl text-green-600" />
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Total Farmers</p>
+              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalFarmers}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-green-600 bg-green-50 w-fit px-2 py-1 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-2"></div>
+                Active Registered
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-sm transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center mb-4">
-                  <FaUsers className="text-green-600 text-lg" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">{stats.totalFarmers}</h3>
-                <p className="text-sm text-gray-600">Farmers</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <FaMapMarkerAlt className="text-6xl text-blue-600" />
               </div>
-              <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                Active
+              <p className="text-sm font-medium text-gray-500 mb-1">Total Free Hectares</p>
+              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalHectares}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2"></div>
+                Cultivated Land
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-sm transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-4">
-                  <FaMapMarkerAlt className="text-blue-600 text-lg" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">{stats.totalHectares}</h3>
-                <p className="text-sm text-gray-600">Hectares</p>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <FaSeedling className="text-6xl text-amber-600" />
               </div>
-              <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                Cultivated
+              <p className="text-sm font-medium text-gray-500 mb-1">Crop Varieties</p>
+              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalVegetables}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-amber-600 bg-amber-50 w-fit px-2 py-1 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-2"></div>
+                Monitored Types
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-sm transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center mb-4">
-                  <FaSeedling className="text-amber-600 text-lg" />
+            {userRole === "admin" && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <FaClipboardList className="text-6xl text-red-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">{stats.totalVegetables}</h3>
-                <p className="text-sm text-gray-600">Crop Types</p>
-              </div>
-              <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                Cultivated
-              </div>
-            </div>
-          </div>
-
-          {userRole === "admin" && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-sm transition-shadow">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center mb-4">
-                    <FaClipboardList className="text-red-600 text-lg" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-1">{stats.pendingRegistrations}</h3>
-                  <p className="text-sm text-gray-600">Pending</p>
-                </div>
-                <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                <p className="text-sm font-medium text-gray-500 mb-1">Pending Approvals</p>
+                <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.pendingRegistrations}</h3>
+                <div className="mt-4 flex items-center text-xs font-medium text-red-600 bg-red-50 w-fit px-2 py-1 rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 mr-2 animate-pulse"></div>
                   Action Required
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </section>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Quick Actions and Recent Activity */}
+        {/* 2. Main Grid: Map & Activity/Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+          {/* Left Column: Map - Clean Card */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {quickActions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.name}
-                      onClick={() => navigate(action.path)}
-                      className={`${action.color} border rounded-xl p-4 text-left hover:shadow-sm transition-all group`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                          <Icon className="text-lg" />
-                        </div>
-                        <span className="font-medium text-gray-900">{action.name}</span>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-xs text-gray-500">Click to open</span>
-                        <FaArrowRight className="text-gray-400 text-xs group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </button>
-                  );
-                })}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+              <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center bg-white">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <FaMap className="text-green-600" />
+                  Geospatial Overview
+                </h3>
+                <button
+                  onClick={() => navigate('/home/maps')}
+                  className="text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  Expand Map <FaExpand />
+                </button>
               </div>
-            </div>
-
-            {/* Map Overview */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Farm Locations</h3>
-                  <button
-                    onClick={() => navigate('/home/maps')}
-                    className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center space-x-2"
-                  >
-                    <span>Full Map</span>
-                    <FaExpand className="text-xs" />
-                  </button>
-                </div>
-              </div>
-              <div className="h-[400px]">
+              <div className="flex-1 relative z-0">
                 <MapContainer
                   center={defaultCenter}
                   zoom={defaultZoom}
@@ -535,16 +464,17 @@ const Home = () => {
                   whenCreated={setMapRef}
                   zoomControl={false}
                   scrollWheelZoom={false}
+                  className="z-0"
                 >
                   <TileLayer
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                     attribution='&copy; OpenStreetMap contributors'
                   />
-                  <ZoomControl position="topright" />
+                  <ZoomControl position="bottomright" />
 
                   {/* DA Office Marker */}
-                  <Marker 
-                    position={[daOffice.lat, daOffice.lng]} 
+                  <Marker
+                    position={[daOffice.lat, daOffice.lng]}
                     icon={createPinIcon("blue")}
                   >
                     <Popup>
@@ -555,7 +485,7 @@ const Home = () => {
                     </Popup>
                   </Marker>
 
-                  {/* Farmer Markers with Clustering */}
+                  {/* Farmer Markers */}
                   <MarkerClusterGroup
                     showCoverageOnHover={false}
                     spiderfyOnMaxZoom={true}
@@ -564,9 +494,9 @@ const Home = () => {
                     iconCreateFunction={(cluster) => {
                       const count = cluster.getChildCount();
                       return L.divIcon({
-                        html: `<div class="bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold border-2 border-white shadow-md">${count}</div>`,
+                        html: `<div class="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold border-2 border-white shadow-md hover:bg-green-700 transition-colors">${count}</div>`,
                         className: "custom-cluster-icon",
-                        iconSize: [40, 40],
+                        iconSize: [32, 32],
                       });
                     }}
                   >
@@ -574,29 +504,23 @@ const Home = () => {
                       const position = getMarkerPosition(farm.coordinates);
                       const iconColor = getIconColor(farm.mainCrop);
                       return (
-                        <Marker 
-                          key={farm.id} 
-                          position={position} 
+                        <Marker
+                          key={farm.id}
+                          position={position}
                           icon={createPinIcon(iconColor)}
                         >
                           <Popup>
-                            <div className="p-2 min-w-[180px]">
-                              <h3 className="font-semibold text-gray-900 mb-2 text-sm">{farm.name}</h3>
-                              <div className="space-y-1 text-xs">
-                                <p className="flex items-center space-x-2">
-                                  <FaLeaf className="text-green-500" />
-                                  <span>{farm.mainCrop}</span>
-                                </p>
-                                <p className="flex items-center space-x-2">
-                                  <FaMapMarkerAlt className="text-blue-500" />
-                                  <span>{farm.location}</span>
-                                </p>
+                            <div className="p-1 min-w-[160px]">
+                              <p className="font-bold text-gray-900 text-sm mb-1">{farm.name}</p>
+                              <div className="text-xs text-gray-500 space-y-1">
+                                <span className="block">{farm.mainCrop}</span>
+                                <span className="block truncate">{farm.location}</span>
                               </div>
                               <button
                                 onClick={() => navigate(`/home/farmer/${farm.id}`)}
-                                className="mt-3 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors"
+                                className="mt-2 w-full py-1 text-xs font-medium text-green-600 bg-green-50 rounded hover:bg-green-100 transition-colors"
                               >
-                                View Profile
+                                View Details
                               </button>
                             </div>
                           </Popup>
@@ -606,37 +530,96 @@ const Home = () => {
                   </MarkerClusterGroup>
                 </MapContainer>
               </div>
-              <div className="bg-gray-50 px-6 py-3 border-t border-gray-100">
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span>{farmers.length} farms registered</span>
-                  <span className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <span>DA Office</span>
-                  </span>
+            </div>
+
+            {/* Market Analytics - Moved below Map for better flow on large screens */}
+            {dashboardData && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div onClick={() => navigate('/home/dashboard')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                      <FaDatabase className="text-blue-600" />
+                    </div>
+                    <FaArrowRight className="text-gray-300 group-hover:text-blue-500 transition-colors text-sm" />
+                  </div>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                    {dashboardData.volume_data?.reduce((sum, item) => sum + item.volume, 0).toLocaleString() || 0}
+                    <span className="text-sm font-normal text-gray-400 ml-1">kg</span>
+                  </h4>
+                  <p className="text-sm text-gray-500">Total Volume Traded</p>
+                </div>
+
+                <div onClick={() => navigate('/home/dashboard')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-2 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
+                      <FaChartBar className="text-green-600" />
+                    </div>
+                    <FaArrowRight className="text-gray-300 group-hover:text-green-500 transition-colors text-sm" />
+                  </div>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                    ₱{(dashboardData.price_data?.length > 0
+                      ? (dashboardData.price_data.reduce((sum, item) => sum + item.average_price, 0) / dashboardData.price_data.length)
+                      : 0).toFixed(2)}
+                  </h4>
+                  <p className="text-sm text-gray-500">Average Market Price</p>
+                </div>
+
+                <div onClick={() => navigate('/home/vegetables')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+                      <FaLeaf className="text-purple-600" />
+                    </div>
+                    <FaArrowRight className="text-gray-300 group-hover:text-purple-500 transition-colors text-sm" />
+                  </div>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                    {dashboardData.commodities?.length || 0}
+                  </h4>
+                  <p className="text-sm text-gray-500">Active Commodities</p>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Right Column - Recent Activity & Top Crops */}
+          {/* Right Column: Quick Actions & Notifications */}
           <div className="space-y-6">
-            {/* Notifications */}
-            {userRole === "admin" && notifications.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                  <FaBell className="text-gray-600" />
-                  <span>Notifications</span>
-                </h3>
-                <div className="space-y-3">
-                  {notifications.map((notif) => (
-                    <div key={notif.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                      {getNotificationIcon(notif.type)}
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900 mb-1">{notif.message}</p>
-                        <p className="text-xs text-gray-500 flex items-center space-x-1">
-                          <FaClock className="text-xs" />
-                          <span>{notif.time}</span>
-                        </p>
+
+            {/* Quick Actions - Grid of Icon Cards */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.name}
+                      onClick={() => navigate(action.path)}
+                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200 group text-center"
+                    >
+                      <Icon className={`text-xl mb-2 ${action.color.split(' ')[2]}`} />
+                      <span className="text-xs font-semibold text-gray-700 group-hover:text-gray-900">{action.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Notifications - List Style */}
+            {userRole === "admin" && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
+                  {notifications.length > 0 && <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{notifications.length}</span>}
+                </div>
+
+                <div className="space-y-4">
+                  {notifications.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No new notifications</p>
+                  ) : notifications.map((notif) => (
+                    <div key={notif.id} className="flex gap-3 items-start p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="mt-1">{getNotificationIcon(notif.type)}</div>
+                      <div>
+                        <p className="text-sm text-gray-800 font-medium leading-tight">{notif.message}</p>
+                        <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
                       </div>
                     </div>
                   ))}
@@ -644,27 +627,25 @@ const Home = () => {
               </div>
             )}
 
-            {/* Top Crops */}
+            {/* Top Crops - List Style */}
             {topCrops.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Crops</h3>
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Top Crops</h3>
                 <div className="space-y-4">
                   {topCrops.map((crop, index) => (
-                    <div key={crop.name} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                          <span className="text-green-600 font-semibold">{index + 1}</span>
-                        </div>
+                    <div key={crop.name} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 text-sm font-bold text-gray-300 group-hover:text-green-500 transition-colors">0{index + 1}</span>
                         <div>
-                          <p className="font-medium text-gray-900">{crop.name}</p>
+                          <p className="text-sm font-semibold text-gray-900">{crop.name}</p>
                           <p className="text-xs text-gray-500">{crop.count} farms</p>
                         </div>
                       </div>
-                      <div className="w-16 bg-gray-100 rounded-full h-2">
-                        <div 
-                          className="bg-green-600 h-2 rounded-full"
+                      <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full"
                           style={{ width: `${(crop.count / Math.max(...topCrops.map(c => c.count))) * 100}%` }}
-                        ></div>
+                        />
                       </div>
                     </div>
                   ))}
@@ -672,132 +653,6 @@ const Home = () => {
               </div>
             )}
 
-            {/* System Status */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Database</span>
-                  <span className="text-sm font-semibold text-green-600 flex items-center space-x-1">
-                    <FaCheckCircle />
-                    <span>Online</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Sync Status</span>
-                  <span className="text-sm font-semibold text-green-600">Real-time</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Last Updated</span>
-                  <span className="text-sm text-gray-500">Just now</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Farmers Preview */}
-            {userRole === "admin" && farmers.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Farmers</h3>
-                <div className="space-y-3">
-                  {farmers.slice(0, 3).map((farmer) => (
-                    <div
-                      key={farmer.id}
-                      onClick={() => navigate(`/home/farmer`)}
-                      className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <FaUsers className="text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 text-sm">{farmer.name}</p>
-                        <p className="text-xs text-gray-500">{farmer.location}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* V&P Data Summary */}
-        {dashboardData && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Market Analytics</h3>
-              <button
-                onClick={() => navigate('/home/dashboard')}
-                className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center space-x-2"
-              >
-                <span>View Full Report</span>
-                <FaArrowRight className="text-xs" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                    <FaDatabase className="text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {dashboardData.volume_data?.reduce((sum, item) => sum + item.volume, 0).toFixed(0) || 0}
-                    </p>
-                    <p className="text-sm text-gray-600">Total Volume (Kg)</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-                    <FaChartBar className="text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">
-                      ₱{dashboardData.price_data?.length > 0
-                        ? (dashboardData.price_data.reduce((sum, item) => sum + item.average_price, 0) / dashboardData.price_data.length).toFixed(2)
-                        : 0}
-                    </p>
-                    <p className="text-sm text-gray-600">Avg Price</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
-                    <FaCog className="text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {dashboardData.commodities?.length || 0}
-                    </p>
-                    <p className="text-sm text-gray-600">Commodities</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Minimalist Footer */}
-      <div className="bg-white border-t border-gray-100 py-6 mt-8">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                <FaTractor className="text-white text-sm" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">DA Canlaon</p>
-                <p className="text-xs text-gray-500">Agricultural Monitoring</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500">
-              © 2024 Department of Agriculture - Canlaon City
-            </p>
           </div>
         </div>
       </div>

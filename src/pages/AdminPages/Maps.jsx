@@ -185,8 +185,8 @@ const Maps = () => {
     setErrorMessage("");
 
     const filteredFarmers = farmers.filter((f) =>
-      f.name.toLowerCase().includes(lowerTerm) ||
-      f.farmLocation.toLowerCase().includes(lowerTerm)
+      (f.name && f.name.toLowerCase().includes(lowerTerm)) ||
+      (f.farmLocation && f.farmLocation.toLowerCase().includes(lowerTerm))
     );
     setSuggestions(filteredFarmers);
 
@@ -275,15 +275,16 @@ const Maps = () => {
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header and Search Bar */}
-        <header className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <header className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-50">
           <h2 className="text-3xl font-bold text-green-800 flex items-center">
             <FaMapMarkerAlt className="mr-3 text-green-600" />
             Farm Map Explorer
           </h2>
+
         </header>
 
         {/* Map Container */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden h-[600px] transition-all duration-300 hover:shadow-3xl">
+        <div className="relative z-0 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden h-[600px] transition-all duration-300 hover:shadow-3xl">
           <MapContainer
             center={defaultCenter}
             zoom={defaultZoom}
@@ -314,8 +315,8 @@ const Maps = () => {
               </LayersControl.BaseLayer>
               <LayersControl.Overlay name="DA Office">
                 <LayerGroup>
-                  <Marker 
-                    position={[daOffice.lat, daOffice.lng]} 
+                  <Marker
+                    position={[daOffice.lat, daOffice.lng]}
                     icon={createPinIcon("blue")}
                     eventHandlers={{
                       click: () => handleMarkerClick([daOffice.lat, daOffice.lng])
@@ -348,9 +349,9 @@ const Maps = () => {
                     const position = getMarkerPosition(farm.coordinates);
                     const iconColor = getIconColor(farm.vegetable);
                     return (
-                      <Marker 
-                        key={farm.id} 
-                        position={position} 
+                      <Marker
+                        key={farm.id}
+                        position={position}
                         icon={createPinIcon(iconColor)}
                         eventHandlers={{
                           click: () => handleMarkerClick(position)
@@ -400,9 +401,9 @@ const Maps = () => {
 
             {geocodedLocation && Array.isArray(geocodedLocation) ? (
               geocodedLocation.map((loc, index) => (
-                <Marker 
-                  key={`geocoded-${index}`} 
-                  position={[loc.lat, loc.lng]} 
+                <Marker
+                  key={`geocoded-${index}`}
+                  position={[loc.lat, loc.lng]}
                   icon={createPinIcon("purple")}
                   eventHandlers={{
                     click: () => handleMarkerClick([loc.lat, loc.lng])
@@ -412,8 +413,8 @@ const Maps = () => {
                 </Marker>
               ))
             ) : geocodedLocation && (
-              <Marker 
-                position={[geocodedLocation.lat, geocodedLocation.lng]} 
+              <Marker
+                position={[geocodedLocation.lat, geocodedLocation.lng]}
                 icon={createPinIcon("purple")}
                 eventHandlers={{
                   click: () => handleMarkerClick([geocodedLocation.lat, geocodedLocation.lng])

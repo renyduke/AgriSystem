@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import { db } from "../config/firebaseConfig";
 import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc } from "firebase/firestore";
 import { FaSearch, FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaEdit, FaTrash, FaList, FaTh, FaPlus, FaTimes, FaCalendarAlt, FaInfoCircle, FaSave, FaBan, FaFilter, FaUserCircle, FaLocationArrow, FaCrop } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import canlaonLocations from "../data/canlaonLocations";
 import axios from 'axios';
 
 const Farmer = () => {
+  const { id } = useParams();
   const [farmers, setFarmers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -68,10 +69,13 @@ const Farmer = () => {
     fetchData();
   }, []);
 
-  const filteredFarmers = farmers.filter((farmer) =>
-    farmer.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (locationFilter === "" || farmer.farmLocation?.toLowerCase().includes(locationFilter.toLowerCase()))
-  );
+  const filteredFarmers = farmers.filter((farmer) => {
+    if (id) return farmer.id === id;
+    return (
+      farmer.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      (locationFilter === "" || farmer.farmLocation?.toLowerCase().includes(locationFilter.toLowerCase()))
+    );
+  });
 
   const uniqueLocations = [...new Set(farmers.map(farmer => farmer.farmLocation).filter(Boolean))].sort();
 
@@ -281,7 +285,7 @@ const Farmer = () => {
     }
     try {
       const farmerRef = doc(db, "farmers", farmerId);
-      
+
       const updatedData = {
         fullName: editForm.fullName,
         contact: editForm.contact,
@@ -413,7 +417,7 @@ const Farmer = () => {
                 <FaFilter className="mr-2 text-gray-400" />
                 Filter by Location
               </label>
-              <select 
+              <select
                 value={locationFilter}
                 onChange={(e) => setLocationFilter(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -434,22 +438,20 @@ const Farmer = () => {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setViewMode("card")}
-                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${
-                    viewMode === "card" 
-                      ? "bg-green-600 text-white" 
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "card"
+                      ? "bg-green-600 text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                    }`}
                 >
                   <FaTh />
                   <span>Cards</span>
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${
-                    viewMode === "list" 
-                      ? "bg-green-600 text-white" 
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "list"
+                      ? "bg-green-600 text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                    }`}
                 >
                   <FaList />
                   <span>List</span>
@@ -682,7 +684,7 @@ const Farmer = () => {
                             const oldCrop = originalVegetables[index];
                             const isChanged = oldCrop && (crop.name !== oldCrop.name || crop.plantingDate !== oldCrop.plantingDate || crop.harvestDate !== oldCrop.harvestDate);
                             const isNew = !oldCrop;
-                            
+
                             return (
                               <div key={index} className={`p-3 rounded-lg border ${isChanged || isNew ? "border-yellow-200 bg-yellow-50" : "border-gray-200"}`}>
                                 <div className="grid grid-cols-3 gap-2">

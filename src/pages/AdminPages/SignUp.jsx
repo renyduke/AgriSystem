@@ -134,9 +134,9 @@ export function SignUp() {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 overflow-auto">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 py-8 px-4">
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
         <div className="absolute top-40 right-10 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
         <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
@@ -162,59 +162,59 @@ export function SignUp() {
         </div>
       )}
 
-      {/* Main Card Container - Perfectly centered */}
-      <div className="h-full w-full flex items-center justify-center p-4">
-        <div className="relative w-full max-w-md">
+      {/* Main Card Container - Compact Design */}
+      <div className="max-w-md mx-auto">
+        <div className="relative">
           <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 animate-pulse-slow"></div>
           
-          <div className="relative bg-white/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-white/20">
+          <div className="relative bg-white/95 backdrop-blur-xl shadow-2xl rounded-3xl p-6 border border-white/20">
             {/* Logo and Header */}
-            <div className="text-center mb-8">
-              <div className="relative inline-block mb-4">
-                <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full blur-md opacity-50"></div>
-                <img 
-                  src={logo} 
-                  alt="Agri Logo" 
-                  className="relative w-20 h-20 mx-auto rounded-full border-4 border-white shadow-lg"
-                />
-              </div>
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
-                Create Admin Account
+            <div className="text-center mb-6">
+             <div className="inline-flex items-center justify-center mb-4">
+  <img 
+    src={logo} 
+    alt="Agri Logo" 
+    className="w-16 h-16"
+  />
+</div>
+
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1">
+                Admin Registration
               </h2>
-              <p className="text-gray-600 text-sm">Register as system administrator</p>
+              <p className="text-gray-500 text-sm">Create administrator account</p>
             </div>
 
             {/* Error Alert */}
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg animate-shake">
+              <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg animate-shake">
                 <div className="flex items-start">
-                  <FaTimes className="text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                  <FaTimes className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
                   <p className="text-red-700 text-sm font-medium">{error}</p>
                 </div>
               </div>
             )}
 
             {/* Sign Up Form */}
-            <div className="space-y-5">
+            <div className="space-y-4">
               {/* Full Name Input */}
-              <div className="relative">
-                <label htmlFor="fullName" className="block text-sm font-semibold text-gray-700 mb-2">
+              <div className="space-y-1">
+                <label htmlFor="fullName" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
                   Full Name
                 </label>
                 <div className="relative">
-                  <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
                     focusedInput === 'fullName' ? 'text-green-500' : 'text-gray-400'
                   }`}>
-                    <FaUser className="text-lg" />
+                    <FaUser className="text-sm" />
                   </div>
                   <input
                     id="fullName"
                     name="fullName"
                     type="text"
                     placeholder="John Doe"
-                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
                       focusedInput === 'fullName'
-                        ? 'border-green-500 bg-white shadow-lg shadow-green-100'
+                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     value={formData.fullName}
@@ -225,28 +225,27 @@ export function SignUp() {
                     disabled={loading}
                   />
                 </div>
-                
               </div>
 
               {/* Email Input */}
-              <div className="relative">
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+              <div className="space-y-1">
+                <label htmlFor="email" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
                   Email Address
                 </label>
                 <div className="relative">
-                  <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
                     focusedInput === 'email' ? 'text-green-500' : 'text-gray-400'
                   }`}>
-                    <FaEnvelope className="text-lg" />
+                    <FaEnvelope className="text-sm" />
                   </div>
                   <input
                     id="email"
                     name="email"
                     type="email"
-                    placeholder="name@example.com"
-                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
+                    placeholder="admin@example.com"
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
                       focusedInput === 'email'
-                        ? 'border-green-500 bg-white shadow-lg shadow-green-100'
+                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     value={formData.email}
@@ -260,24 +259,24 @@ export function SignUp() {
               </div>
 
               {/* Password Input */}
-              <div className="relative">
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <div className="space-y-1">
+                <label htmlFor="password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
                   Password
                 </label>
                 <div className="relative">
-                  <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
                     focusedInput === 'password' ? 'text-green-500' : 'text-gray-400'
                   }`}>
-                    <FaLock className="text-lg" />
+                    <FaLock className="text-sm" />
                   </div>
                   <input
                     id="password"
                     name="password"
                     type={passwordShown ? "text" : "password"}
-                    placeholder="Minimum 6 characters"
-                    className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
+                    placeholder="••••••"
+                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
                       focusedInput === 'password'
-                        ? 'border-green-500 bg-white shadow-lg shadow-green-100'
+                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     value={formData.password}
@@ -290,34 +289,34 @@ export function SignUp() {
                   <button
                     type="button"
                     onClick={togglePasswordVisibility}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-green-600 transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-green-600 transition-colors"
                     disabled={loading}
                     tabIndex="-1"
                   >
-                    {passwordShown ? <EyeIcon className="h-5 w-5" /> : <EyeSlashIcon className="h-5 w-5" />}
+                    {passwordShown ? <EyeIcon className="h-4 w-4" /> : <EyeSlashIcon className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
               {/* Confirm Password Input */}
-              <div className="relative">
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-2">
+              <div className="space-y-1">
+                <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
                     focusedInput === 'confirmPassword' ? 'text-green-500' : 'text-gray-400'
                   }`}>
-                    <FaLock className="text-lg" />
+                    <FaLock className="text-sm" />
                   </div>
                   <input
                     id="confirmPassword"
                     name="confirmPassword"
                     type={confirmPasswordShown ? "text" : "password"}
-                    placeholder="Re-enter your password"
-                    className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
+                    placeholder="••••••"
+                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
                       focusedInput === 'confirmPassword'
-                        ? 'border-green-500 bg-white shadow-lg shadow-green-100'
+                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     value={formData.confirmPassword}
@@ -330,34 +329,34 @@ export function SignUp() {
                   <button
                     type="button"
                     onClick={toggleConfirmPasswordVisibility}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-green-600 transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-green-600 transition-colors"
                     disabled={loading}
                     tabIndex="-1"
                   >
-                    {confirmPasswordShown ? <EyeIcon className="h-5 w-5" /> : <EyeSlashIcon className="h-5 w-5" />}
+                    {confirmPasswordShown ? <EyeIcon className="h-4 w-4" /> : <EyeSlashIcon className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
               {/* Admin Registration Key */}
-              <div className="relative">
-                <label htmlFor="registrationKey" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Admin Registration Key
+              <div className="space-y-1">
+                <label htmlFor="registrationKey" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  Admin Key
                 </label>
                 <div className="relative">
-                  <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
                     focusedInput === 'registrationKey' ? 'text-green-500' : 'text-gray-400'
                   }`}>
-                    <FaKey className="text-lg" />
+                    <FaKey className="text-sm" />
                   </div>
                   <input
                     id="registrationKey"
                     name="registrationKey"
                     type="text"
-                    placeholder="Enter admin registration key"
-                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
+                    placeholder="Enter admin key"
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
                       focusedInput === 'registrationKey'
-                        ? 'border-green-500 bg-white shadow-lg shadow-green-100'
+                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     value={formData.registrationKey}
@@ -374,22 +373,22 @@ export function SignUp() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                className={`w-full py-3.5 px-6 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 transform ${
+                className={`w-full py-3 px-4 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 mt-2 ${
                   loading
                     ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                    : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl active:scale-[0.98]"
                 }`}
                 disabled={loading}
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <FaSpinner className="animate-spin text-xl" />
+                  <span className="flex items-center justify-center gap-2 text-sm">
+                    <FaSpinner className="animate-spin" />
                     <span>Creating Account...</span>
                   </span>
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <span>Create Account</span>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span className="flex items-center justify-center gap-2 text-sm">
+                    <span>Create Admin Account</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
                   </span>
@@ -398,8 +397,8 @@ export function SignUp() {
             </div>
 
             {/* Footer */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-center text-sm text-gray-600">
+            <div className="mt-6 pt-5 border-t border-gray-200">
+              <p className="text-center text-xs text-gray-600">
                 Already have an account?{" "}
                 <button 
                   onClick={navigateToSignIn}

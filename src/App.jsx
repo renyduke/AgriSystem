@@ -24,6 +24,7 @@ import SuggestFarmer from "./pages/AdminPages/FarmerVegetablePage";
 import Dashboard from "./pages/AdminPages/Dashboard";
 import VolumePage from "./pages/AdminPages/VolumePage";
 import PricePage from "./pages/AdminPages/PricePage";
+import FarmerBankingPage from "./pages/AdminPages/FarmerBankingPage";
 
 function App() {
   return (
@@ -43,15 +44,16 @@ function App() {
           <Route path="vegetables" element={<Vegetables />} />
           <Route path="profile" element={<Profile />} />
           <Route path="drawmap" element={<Drawmap />} />
-          <Route 
-            path="analysis" 
+          <Route
+            path="analysis"
             element={
               <ErrorBoundary>
                 <Analysis />
               </ErrorBoundary>
-            } 
+            }
           />
           <Route path="farmer" element={<Farmer />} />
+          <Route path="farmer/:id" element={<Farmer />} />
           <Route path="usermanagement" element={<UserManagement />} />
           <Route path="farmerregister" element={<FarmerRegister />} />
           <Route path="reports" element={<Reports />} />
@@ -60,8 +62,9 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="logout" element={<LogOut />} />
           <Route path="dashboard" element={<Dashboard />} />
-           <Route path="volume" element={<VolumePage />} />
-            <Route path="price" element={<PricePage />} />
+          <Route path="volume" element={<VolumePage />} />
+          <Route path="price" element={<PricePage />} />
+          <Route path="farmer-banking" element={<FarmerBankingPage />} />
         </Route>
 
         {/* Root-level Farmer Profile Route (optional, for non-admin access) */}

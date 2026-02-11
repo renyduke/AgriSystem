@@ -7,44 +7,56 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { FaTractor, FaArrowLeft } from "react-icons/fa";
+import {
+  Tractor,
+  ArrowLeft,
+  MapPin,
+  Ruler,
+  Sprout,
+  Search,
+  Loader2,
+  Users
+} from "lucide-react";
 
-/* ------------------------------------------------------------------ */
-/*  Custom animation styles (kept in a <style> tag for simplicity)   */
-/* ------------------------------------------------------------------ */
-const customStyles = `
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateX(20px); }
-    to   { opacity: 1; transform: translateX(0); }
-  }
-  .animate-slide-in { animation: slideIn 0.5s ease-out; }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  .animate-fade-in { animation: fadeIn 0.3s ease-in; }
-`;
+// Basic Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
 
-/* ------------------------------------------------------------------ */
-/*  Main page component                                               */
-/* ------------------------------------------------------------------ */
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center min-h-[400px] bg-red-50 rounded-xl p-8">
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-red-800">Something went wrong!</h2>
+            <p className="text-red-600 mt-2">Please try refreshing the page.</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const FarmerVegetablePage = () => {
   const [vegetableOptions, setVegetableOptions] = useState([]);
   const [selectedVegetable, setSelectedVegetable] = useState("");
   const [loadingVegetables, setLoadingVegetables] = useState(true);
   const navigate = useNavigate();
 
-  /* -------------------------------------------------------------- */
-  /*  Fetch the list of vegetables from Firestore                  */
-  /* -------------------------------------------------------------- */
   useEffect(() => {
     const fetchVegetables = async () => {
       try {
         setLoadingVegetables(true);
         const snap = await getDocs(collection(db, "vegetables_list"));
         const list = snap.docs.map((doc) => doc.data().name);
+        // Sort alphabetically
+        list.sort((a, b) => a.localeCompare(b));
         setVegetableOptions(list);
-        setSelectedVegetable(list[0] || "");
+        if (list.length > 0) setSelectedVegetable(list[0]);
       } catch (err) {
         console.error("Error fetching vegetables:", err);
       } finally {
@@ -55,64 +67,90 @@ const FarmerVegetablePage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex flex-col overflow-hidden">
-      <style>{customStyles}</style>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
+        <div className="max-w-6xl mx-auto space-y-8">
 
-      {/* ---------------------------------------------------------- */}
-      {/*  Header area – Back button + Vegetable selector            */}
-      {/* ---------------------------------------------------------- */}
-      <header className="bg-white/80 backdrop-blur-sm shadow-md p-4 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          {/* Back button */}
-          <button
-            onClick={() => navigate("/home")}
-            className="flex items-center space-x-2 text-green-700 hover:text-green-900 bg-white rounded-lg px-4 py-2 shadow hover:shadow-lg transition"
-          >
-            <FaArrowLeft className="text-lg" />
-            <span>Back to Main Page</span>
-          </button>
+          {/* Header Section */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <button
+                  onClick={() => navigate("/home")}
+                  className="flex items-center text-slate-500 hover:text-green-600 mb-4 transition-colors group"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+                  Back to Dashboard
+                </button>
+                <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Users className="w-8 h-8 text-blue-600" />
+                  </div>
+                  Farmer Directory
+                </h1>
+                <p className="text-slate-500 mt-2">
+                  Find farmers based on the crops they produce
+                </p>
+              </div>
 
-          {/* Vegetable selector */}
-          <div className="flex-1 max-w-md">
-            {loadingVegetables ? (
-              <p className="text-green-800 animate-pulse">Loading vegetables…</p>
+              {/* Vegetable Selector */}
+              <div className="w-full md:w-72">
+                <label className="block text-sm font-medium text-slate-600 mb-2">Select Vegetable</label>
+                <div className="relative">
+                  {loadingVegetables ? (
+                    <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Sprout className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-600" />
+                      <select
+                        value={selectedVegetable}
+                        onChange={(e) => setSelectedVegetable(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none cursor-pointer hover:border-green-300 transition-colors text-slate-700"
+                      >
+                        {vegetableOptions.length === 0 ? (
+                          <option disabled>No vegetables found</option>
+                        ) : (
+                          vegetableOptions.map((veg) => (
+                            <option key={veg} value={veg}>
+                              {veg}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="space-y-6">
+            {selectedVegetable ? (
+              <FarmersList vegetable={selectedVegetable} />
             ) : (
-              <select
-                value={selectedVegetable}
-                onChange={(e) => setSelectedVegetable(e.target.value)}
-                className="w-full p-2 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-green-800"
-              >
-                {vegetableOptions.length === 0 ? (
-                  <option disabled>No vegetables found</option>
-                ) : (
-                  vegetableOptions.map((veg) => (
-                    <option key={veg} value={veg}>
-                      {veg}
-                    </option>
-                  ))
-                )}
-              </select>
+              !loadingVegetables && (
+                <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                  <Sprout className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500">Please select a vegetable to view farmers</p>
+                </div>
+              )
             )}
           </div>
         </div>
-      </header>
-
-      {/* ---------------------------------------------------------- */}
-      {/*  Main content – Farmers list (only rendered when a veg   */}
-      {/*  has been chosen)                                        */}
-      {/* ---------------------------------------------------------- */}
-      <main className="flex-1 p-6">
-        {selectedVegetable && (
-          <FarmersList vegetable={selectedVegetable} />
-        )}
-      </main>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };
 
-/* ------------------------------------------------------------------ */
-/*  Farmers list component                                            */
-/* ------------------------------------------------------------------ */
 const FarmersList = ({ vegetable }) => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,32 +159,39 @@ const FarmersList = ({ vegetable }) => {
     const fetchFarmers = async () => {
       try {
         setLoading(true);
+        setFarmers([]);
 
-        /* 1. Find vegetable docs that match the selected name */
         const vegQuery = query(
           collection(db, "vegetables"),
           where("name", "==", vegetable)
         );
         const vegSnap = await getDocs(vegQuery);
-        const farmerIds = vegSnap.docs.map((d) => d.data().farmerId);
+        const farmerIds = [...new Set(vegSnap.docs.map((d) => d.data().farmerId))]; // Deduplicate IDs
 
         if (farmerIds.length === 0) {
-          setFarmers([]);
+          setLoading(false);
           return;
         }
 
-        /* 2. Pull the farmer docs (Firestore "in" query limit = 10) */
-        const farmerQuery = query(
-          collection(db, "farmers"),
-          where("__name__", "in", farmerIds.slice(0, 10)) // adjust if you need pagination
-        );
-        const farmerSnap = await getDocs(farmerQuery);
+        // Fetch farmers in batches (Firestore 'in' limit is 10)
+        const chunks = [];
+        for (let i = 0; i < farmerIds.length; i += 10) {
+          chunks.push(farmerIds.slice(i, i + 10));
+        }
 
-        const data = farmerSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setFarmers(data);
+        const allFarmers = [];
+        for (const chunk of chunks) {
+          const farmerQuery = query(
+            collection(db, "farmers"),
+            where("__name__", "in", chunk)
+          );
+          const farmerSnap = await getDocs(farmerQuery);
+          farmerSnap.forEach((doc) => {
+            allFarmers.push({ id: doc.id, ...doc.data() });
+          });
+        }
+
+        setFarmers(allFarmers);
       } catch (err) {
         console.error("Error fetching farmers:", err);
       } finally {
@@ -157,47 +202,87 @@ const FarmersList = ({ vegetable }) => {
     fetchFarmers();
   }, [vegetable]);
 
-  return (
-    <section className="max-w-5xl mx-auto animate-slide-in">
-      <div className="bg-white rounded-2xl shadow-xl p-6">
-        <h2 className="text-3xl font-bold text-green-800 mb-6">
-          Farmers producing <span className="text-green-600">{vegetable}</span>
-        </h2>
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader2 className="w-10 h-10 text-green-600 animate-spin mb-4" />
+        <p className="text-slate-500 font-medium">Finding farmers who grow {vegetable}...</p>
+      </div>
+    );
+  }
 
-        {/* Loading spinner */}
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent" />
-          </div>
-        ) : farmers.length > 0 ? (
-          /* Grid of farmer cards */
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {farmers.map((farmer) => (
-              <div
-                key={farmer.id}
-                className="bg-gradient-to-br from-green-50 to-white rounded-xl p-5 shadow-md hover:shadow-lg transition-transform hover:-translate-y-1"
-              >
-                <p className="text-lg font-semibold text-green-800">{farmer.fullName}</p>
-                <div className="mt-2 space-y-1 text-sm text-gray-600">
-                  <p>
-                    <span className="font-medium">Location:</span> {farmer.farmLocation}
-                  </p>
-                  <p>
-                    <span className="font-medium">Farm size:</span>{" "}
-                    {farmer.farmSizeHectares || farmer.farmSize} ha
-                  </p>
+  if (farmers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-dashed border-slate-300">
+        <div className="p-4 bg-slate-50 rounded-full mb-4">
+          <Tractor className="w-8 h-8 text-slate-400" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-700">No Farmers Found</h3>
+        <p className="text-slate-500 mt-1">
+          There are currently no farmers listed for <span className="font-semibold text-slate-700">{vegetable}</span>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between px-2">
+        <h2 className="text-lg font-semibold text-slate-700">
+          Showing {farmers.length} Result{farmers.length !== 1 && 's'}
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {farmers.map((farmer) => (
+          <div
+            key={farmer.id}
+            className="group bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md hover:border-green-200 transition-all duration-300"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 font-bold text-xl border border-green-100">
+                  {farmer.fullName ? farmer.fullName.charAt(0).toUpperCase() : <Users className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-lg group-hover:text-green-700 transition-colors">
+                    {farmer.fullName || "Unknown Farmer"}
+                  </h3>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                    Verified Farmer
+                  </span>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-slate-50">
+              <div className="flex items-start gap-3 text-slate-600">
+                <MapPin className="w-5 h-5 text-slate-400 mt-0.5" />
+                <span className="text-sm">{farmer.farmLocation || "Location not specified"}</span>
+              </div>
+
+              <div className="flex items-center gap-3 text-slate-600">
+                <Ruler className="w-5 h-5 text-slate-400" />
+                <span className="text-sm">
+                  <span className="font-semibold text-slate-700">{farmer.farmSizeHectares || farmer.farmSize || 0}</span> hectares
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 text-slate-600">
+                <Tractor className="w-5 h-5 text-slate-400" />
+                <span className="text-sm">Mixed Farming</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <button className="w-full py-2.5 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-green-600 hover:text-white transition-all duration-200">
+                View Details
+              </button>
+            </div>
           </div>
-        ) : (
-          /* Empty state */
-          <p className="text-center text-gray-600 py-12">
-            No farmers found producing <strong>{vegetable}</strong> at this time.
-          </p>
-        )}
+        ))}
       </div>
-    </section>
+    </div>
   );
 };
 

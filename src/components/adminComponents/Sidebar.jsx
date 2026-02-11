@@ -7,6 +7,7 @@ const Sidebar = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showVegetablesDropdown, setShowVegetablesDropdown] = useState(false);
   const [showDashboardsDropdown, setShowDashboardsDropdown] = useState(false); // New
+  const [showReportsDropdown, setShowReportsDropdown] = useState(false); // New
   const [tooltip, setTooltip] = useState(null);
   const [showLogoutPopup, setShowLogoutPopup] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -68,9 +69,8 @@ const Sidebar = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <div
-              className={`bg-white/10 rounded-md p-1 flex-shrink-0 ${
-                collapsed ? "w-8 h-8" : "w-10 h-10"
-              } flex items-center justify-center`}
+              className={`bg-white/10 rounded-md p-1 flex-shrink-0 ${collapsed ? "w-8 h-8" : "w-10 h-10"
+                } flex items-center justify-center`}
             >
               <img
                 src="/logo.png"
@@ -198,50 +198,6 @@ const Sidebar = () => {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
                             </svg>
                             <span className="text-xs">Dashboard</span>
-                          </motion.div>
-                        )}
-                      </NavLink>
-                    </motion.li>
-
-                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-                      <NavLink
-                        to="/home/price"
-                        className={({ isActive }) =>
-                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
-                        }
-                      >
-                        {({ isActive }) => (
-                          <motion.div
-                            variants={itemVariants}
-                            animate={isActive ? "active" : "initial"}
-                            className="flex items-center gap-2 w-full"
-                          >
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
-                            </svg>
-                            <span className="text-xs">Price</span>
-                          </motion.div>
-                        )}
-                      </NavLink>
-                    </motion.li>
-
-                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-                      <NavLink
-                        to="/home/volume"
-                        className={({ isActive }) =>
-                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
-                        }
-                      >
-                        {({ isActive }) => (
-                          <motion.div
-                            variants={itemVariants}
-                            animate={isActive ? "active" : "initial"}
-                            className="flex items-center gap-2 w-full"
-                          >
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
-                            </svg>
-                            <span className="text-xs">Volume</span>
                           </motion.div>
                         )}
                       </NavLink>
@@ -399,6 +355,33 @@ const Sidebar = () => {
               </NavLink>
             </motion.li>
 
+            {/* Farmer Banking */}
+            <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+              <NavLink
+                to="/home/farmer-banking"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
+                }
+                onMouseEnter={() => setTooltip(collapsed ? "farmer-banking" : null)}
+                onMouseLeave={() => setTooltip(null)}
+              >
+                {({ isActive }) => (
+                  <motion.div
+                    variants={itemVariants}
+                    animate={isActive ? "active" : "initial"}
+                    className="flex items-center gap-2 w-full"
+                  >
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>
+                      Farmer Banking
+                    </span>
+                  </motion.div>
+                )}
+              </NavLink>
+            </motion.li>
+
             {/* User Management */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
               <NavLink
@@ -443,25 +426,112 @@ const Sidebar = () => {
 
             <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">OTHER</li>
 
-            {/* Reports */}
+            {/* Reports Dropdown */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-              <NavLink
-                to="/home/reports"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
-                }
+              <div
+                className="flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 cursor-pointer select-none"
+                onClick={() => setShowReportsDropdown((s) => !s)}
                 onMouseEnter={() => setTooltip(collapsed ? "reports" : null)}
                 onMouseLeave={() => setTooltip(null)}
               >
-                {({ isActive }) => (
-                  <motion.div variants={itemVariants} animate={isActive ? "active" : "initial"} className="flex items-center gap-2 w-full">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>Reports</span>
-                  </motion.div>
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" />
+                </svg>
+                <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>
+                  Reports
+                </span>
+                <motion.svg
+                  className="w-3 h-3 ml-auto flex-shrink-0"
+                  animate={{ rotate: showReportsDropdown ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </motion.svg>
+              </div>
+
+              <AnimatePresence>
+                {showReportsDropdown && (
+                  <motion.ul
+                    className={`ml-6 space-y-1 mt-1 ${collapsed ? "ml-2" : ""}`}
+                    variants={dropdownVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="hidden"
+                  >
+                    {/* Main Reports */}
+                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+                      <NavLink
+                        to="/home/reports"
+                        className={({ isActive }) =>
+                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <motion.div
+                            variants={itemVariants}
+                            animate={isActive ? "active" : "initial"}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="text-xs">Summary Reports</span>
+                          </motion.div>
+                        )}
+                      </NavLink>
+                    </motion.li>
+
+                    {/* Price Report */}
+                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+                      <NavLink
+                        to="/home/price"
+                        className={({ isActive }) =>
+                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <motion.div
+                            variants={itemVariants}
+                            animate={isActive ? "active" : "initial"}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            <span className="text-xs">Price Data</span>
+                          </motion.div>
+                        )}
+                      </NavLink>
+                    </motion.li>
+
+                    {/* Volume Report */}
+                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+                      <NavLink
+                        to="/home/volume"
+                        className={({ isActive }) =>
+                          `block p-1 text-xs hover:bg-green-600 rounded ${isActive ? "bg-green-600" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <motion.div
+                            variants={itemVariants}
+                            animate={isActive ? "active" : "initial"}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            <span className="text-xs">Volume Data</span>
+                          </motion.div>
+                        )}
+                      </NavLink>
+                    </motion.li>
+                  </motion.ul>
                 )}
-              </NavLink>
+              </AnimatePresence>
             </motion.li>
 
             {/* Logout */}

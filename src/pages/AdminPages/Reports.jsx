@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import ReactApexChart from "react-apexcharts";
 import { db } from "../../config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
-import { 
-  FaFileAlt, FaDownload, FaFilter, FaCalendar, FaChartBar, 
+import {
+  FaFileAlt, FaDownload, FaFilter, FaCalendar, FaChartBar,
   FaPrint, FaSpinner, FaTractor, FaSeedling, FaMapMarkedAlt,
   FaUsers, FaLeaf, FaChartLine, FaChartPie, FaTable
 } from "react-icons/fa";
@@ -14,13 +14,13 @@ const Reports = () => {
   const [dateRange, setDateRange] = useState("all");
   const [selectedBarangay, setSelectedBarangay] = useState("all");
   const [selectedCrop, setSelectedCrop] = useState("all");
-  
+
   // Data states
   const [farmers, setFarmers] = useState([]);
   const [vegetables, setVegetables] = useState([]);
   const [barangays, setBarangays] = useState([]);
   const [crops, setCrops] = useState([]);
-  
+
   // Analytics states
   const [summaryStats, setSummaryStats] = useState({
     totalFarmers: 0,
@@ -29,7 +29,7 @@ const Reports = () => {
     activeFarms: 0,
     avgFarmSize: 0
   });
-  
+
   const [barangayData, setBarangayData] = useState([]);
   const [cropDistribution, setCropDistribution] = useState([]);
   const [seasonalData, setSeasonalData] = useState([]);
@@ -51,7 +51,7 @@ const Reports = () => {
   const fetchReportData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch farmers
       const farmersSnapshot = await getDocs(collection(db, "farmers"));
       const farmersData = farmersSnapshot.docs.map(doc => ({
@@ -80,7 +80,7 @@ const Reports = () => {
 
       // Calculate initial analytics
       calculateAnalytics(farmersData);
-      
+
       setLoading(false);
     } catch (error) {
       console.error("Error fetching report data:", error);
@@ -105,7 +105,7 @@ const Reports = () => {
     if (dateRange !== "all") {
       const now = new Date();
       const filterDate = new Date();
-      
+
       switch (dateRange) {
         case "today":
           filterDate.setHours(0, 0, 0, 0);
@@ -135,7 +135,7 @@ const Reports = () => {
     // Summary Statistics
     const totalHectares = data.reduce((sum, f) => sum + f.hectares, 0);
     const avgFarmSize = data.length > 0 ? totalHectares / data.length : 0;
-    
+
     setSummaryStats({
       totalFarmers: data.length,
       totalHectares: totalHectares.toFixed(2),
@@ -154,7 +154,7 @@ const Reports = () => {
       barangayStats[barangay].count++;
       barangayStats[barangay].hectares += farmer.hectares;
     });
-    
+
     const barangayArray = Object.entries(barangayStats)
       .map(([name, stats]) => ({ name, ...stats }))
       .sort((a, b) => b.hectares - a.hectares);
@@ -171,7 +171,7 @@ const Reports = () => {
         });
       }
     });
-    
+
     const cropArray = Object.entries(cropStats)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
@@ -210,7 +210,7 @@ const Reports = () => {
       }
       productionStats[crop] += farmer.hectares;
     });
-    
+
     const productionArray = Object.entries(productionStats)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
@@ -230,27 +230,39 @@ const Reports = () => {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Name", "Barangay", "Hectares", "Main Crop", "Farm Type", "Land Ownership"];
+    const headers = [
+      "ID", "Name", "Contact", "Barangay", "Coordinates",
+      "Total Hectares", "Main Crop", "Farm Type",
+      "Land Ownership", "Season", "Status", "Created At"
+    ];
+
     const csvData = farmers.map(f => [
-      f.name,
+      f.id,
+      `"${f.name}"`, // Quote strings to handle commas
+      f.contact || "N/A",
       f.farmBarangay || "N/A",
+      f.coordinates ? `"${f.coordinates.join(', ')}"` : "N/A",
       f.hectares,
       f.mainCrop,
       f.farmType || "N/A",
-      f.landOwnership || "N/A"
+      f.landOwnership || "N/A",
+      f.season || "N/A",
+      f.status || "Active",
+      f.timestamp ? new Date(f.timestamp).toLocaleDateString() : "N/A"
     ]);
-    
+
     const csvContent = [
       headers.join(","),
       ...csvData.map(row => row.join(","))
     ].join("\n");
-    
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `agricultural-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `agrimap-master-report-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
@@ -261,7 +273,7 @@ const Reports = () => {
     colors: COLORS,
     plotOptions: { bar: { borderRadius: 8, distributed: true, horizontal: false } },
     dataLabels: { enabled: false },
-    xaxis: { 
+    xaxis: {
       categories: barangayData.map(b => b.name),
       labels: { rotate: -45, style: { fontSize: '11px' } }
     },
@@ -319,8 +331,8 @@ const Reports = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-6 print:p-0 print:bg-white">
+      <div className="max-w-7xl mx-auto space-y-6 print:hidden">
         {/* Header */}
         <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 border border-white/50">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -335,7 +347,7 @@ const Reports = () => {
                 <p className="text-gray-600 text-sm mt-1">Comprehensive analytics and insights</p>
               </div>
             </div>
-            
+
             <div className="flex gap-2">
               <button
                 onClick={handleExportCSV}
@@ -349,7 +361,7 @@ const Reports = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg"
               >
                 <FaPrint />
-                <span className="hidden md:inline">Print</span>
+                <span className="hidden md:inline">Print Master Report</span>
               </button>
             </div>
           </div>
@@ -429,11 +441,10 @@ const Reports = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-6 py-4 font-medium transition-all whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
-                        : 'text-gray-600 hover:text-green-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center gap-2 px-6 py-4 font-medium transition-all whitespace-nowrap ${activeTab === tab.id
+                      ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
+                      : 'text-gray-600 hover:text-green-600 hover:bg-gray-50'
+                      }`}
                   >
                     <Icon />
                     {tab.label}
@@ -721,7 +732,7 @@ const Reports = () => {
                       </tbody>
                     </table>
                   </div>
-                  
+
                   {farmers.length === 0 && (
                     <div className="p-12 text-center">
                       <FaFilter className="text-gray-300 text-5xl mx-auto mb-4" />
@@ -779,141 +790,237 @@ const Reports = () => {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Additional Analytics Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Monthly/Seasonal Breakdown */}
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FaCalendar className="text-green-600" />
-              Seasonal Analysis
-            </h3>
-            <div className="space-y-4">
-              {seasonalData.map((season, idx) => {
-                const percentage = ((season.count / summaryStats.totalFarmers) * 100).toFixed(1);
-                return (
-                  <div key={idx} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{season.season}</span>
-                      <span className="text-sm font-semibold text-gray-900">{season.count} farmers ({percentage}%)</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {/* PRINT ONLY SECTION - VISIBLE ONLY WHEN PRINTING */}
+      <div className="hidden print:block space-y-8 bg-white p-8">
+        <div className="text-center border-b-2 border-green-600 pb-6 mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">AgriMap Master Report</h1>
+          <p className="text-gray-600">Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+          <p className="text-sm text-gray-500 mt-2">Comprehensive Agricultural Data Analysis for Canlaon City</p>
+        </div>
+
+        {/* Print Summary Stats */}
+        <div className="grid grid-cols-5 gap-4 mb-8">
+          <PrintStat title="Farmers" value={summaryStats.totalFarmers} />
+          <PrintStat title="Hectares" value={summaryStats.totalHectares} />
+          <PrintStat title="Crops" value={summaryStats.totalVegetables} />
+          <PrintStat title="Active" value={summaryStats.activeFarms} />
+          <PrintStat title="Avg Size" value={`${summaryStats.avgFarmSize} ha`} />
+        </div>
+
+        {/* Print Charts Row 1 */}
+        <div className="grid grid-cols-2 gap-8 mb-8 break-inside-avoid">
+          <div className="border p-4 rounded-xl">
+            <h3 className="font-bold text-lg mb-4 text-center">Production By Barangay</h3>
+            <ReactApexChart options={barangayChartOptions} series={[{ data: barangayData.map(b => b.hectares) }]} type="bar" height={300} />
           </div>
-
-          {/* Regional Performance */}
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FaMapMarkedAlt className="text-blue-600" />
-              Regional Performance
-            </h3>
-            <div className="space-y-3">
-              {barangayData.slice(0, 5).map((barangay, idx) => (
-                <div key={idx} className="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="font-bold text-blue-600">{idx + 1}</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">{barangay.name}</p>
-                        <p className="text-xs text-gray-500">{barangay.count} farmers</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-green-600">{barangay.hectares.toFixed(2)}</p>
-                      <p className="text-xs text-gray-500">hectares</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-blue-400 to-cyan-500 h-2 rounded-full"
-                      style={{ width: `${(barangay.hectares / Math.max(...barangayData.map(b => b.hectares))) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="border p-4 rounded-xl">
+            <h3 className="font-bold text-lg mb-4 text-center">Crop Distribution</h3>
+            <ReactApexChart options={cropPieOptions} series={cropDistribution.map(c => c.count)} type="donut" height={300} />
           </div>
         </div>
 
-        {/* Executive Summary */}
+        {/* Print Charts Row 2 */}
+        <div className="grid grid-cols-2 gap-8 mb-8 break-inside-avoid">
+          <div className="border p-4 rounded-xl">
+            <h3 className="font-bold text-lg mb-4 text-center">Land Ownership</h3>
+            <ReactApexChart options={{ ...cropPieOptions, labels: landOwnershipData.map(d => d.ownership) }} series={landOwnershipData.map(d => d.count)} type="donut" height={300} />
+          </div>
+          <div className="border p-4 rounded-xl">
+            <h3 className="font-bold text-lg mb-4 text-center">Farm Types</h3>
+            <ReactApexChart options={{ ...cropPieOptions, labels: farmTypeData.map(d => d.type) }} series={farmTypeData.map(d => d.count)} type="donut" height={300} />
+          </div>
+        </div>
+
+        {/* Print Top Producers Table */}
+        <div className="mb-8 break-inside-avoid">
+          <h3 className="font-bold text-xl mb-4 text-green-800 border-b border-gray-200 pb-2">Top 10 Producers</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-100 border-b-2 border-gray-300">
+                <th className="p-2 text-left">Rank</th>
+                <th className="p-2 text-left">Name</th>
+                <th className="p-2 text-left">Barangay</th>
+                <th className="p-2 text-right">Hectares</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topProducers.map((p, i) => (
+                <tr key={i} className="border-b border-gray-100">
+                  <td className="p-2">{i + 1}</td>
+                  <td className="p-2 font-medium">{p.name}</td>
+                  <td className="p-2 text-gray-600">{p.barangay}</td>
+                  <td className="p-2 text-right">{p.production.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Print Full Database */}
+        <div className="break-before-page">
+          <h3 className="font-bold text-xl mb-4 text-green-800 border-b border-gray-200 pb-2">Complete Farmer Database</h3>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-100 border-b-2 border-gray-300">
+                <th className="p-1 text-left">Name</th>
+                <th className="p-1 text-left">Barangay</th>
+                <th className="p-1 text-center">Crop</th>
+                <th className="p-1 text-right">Size (ha)</th>
+                <th className="p-1 text-center">Type</th>
+                <th className="p-1 text-center">Ownership</th>
+              </tr>
+            </thead>
+            <tbody>
+              {farmers.map((f, i) => (
+                <tr key={f.id} className="border-b border-gray-100">
+                  <td className="p-1 font-medium">{f.name}</td>
+                  <td className="p-1">{f.farmBarangay}</td>
+                  <td className="p-1 text-center">{f.mainCrop}</td>
+                  <td className="p-1 text-right">{f.hectares.toFixed(2)}</td>
+                  <td className="p-1 text-center">{f.farmType}</td>
+                  <td className="p-1 text-center">{f.landOwnership}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+
+
+      {/* Additional Analytics Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Monthly/Seasonal Breakdown */}
         <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <FaFileAlt className="text-purple-600" />
-            Executive Summary
+            <FaCalendar className="text-green-600" />
+            Seasonal Analysis
           </h3>
-          <div className="prose prose-sm max-w-none">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500">
-                  <h4 className="font-semibold text-green-900 mb-2">Agricultural Overview</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    Currently monitoring <strong>{summaryStats.totalFarmers}</strong> farmers across <strong>{barangays.length}</strong> barangays, 
-                    cultivating a total of <strong>{summaryStats.totalHectares} hectares</strong> with <strong>{summaryStats.totalVegetables}</strong> different 
-                    crop varieties. The average farm size is <strong>{summaryStats.avgFarmSize} hectares</strong>.
-                  </p>
+          <div className="space-y-4">
+            {seasonalData.map((season, idx) => {
+              const percentage = ((season.count / summaryStats.totalFarmers) * 100).toFixed(1);
+              return (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">{season.season}</span>
+                    <span className="text-sm font-semibold text-gray-900">{season.count} farmers ({percentage}%)</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500"
+                      style={{ width: `${percentage}%` }}
+                    ></div>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
 
-                <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border-l-4 border-blue-500">
-                  <h4 className="font-semibold text-blue-900 mb-2">Top Performers</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    {barangayData.length > 0 && (
-                      <>
-                        <strong>{barangayData[0].name}</strong> leads in production with <strong>{barangayData[0].hectares.toFixed(2)} hectares</strong>, 
-                        followed by {barangayData.length > 1 && <><strong>{barangayData[1].name}</strong> ({barangayData[1].hectares.toFixed(2)} ha)</>}.
-                      </>
-                    )}
-                  </p>
+        {/* Regional Performance */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FaMapMarkedAlt className="text-blue-600" />
+            Regional Performance
+          </h3>
+          <div className="space-y-3">
+            {barangayData.slice(0, 5).map((barangay, idx) => (
+              <div key={idx} className="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 hover:shadow-md transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <span className="font-bold text-blue-600">{idx + 1}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{barangay.name}</p>
+                      <p className="text-xs text-gray-500">{barangay.count} farmers</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-green-600">{barangay.hectares.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500">hectares</p>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-blue-400 to-cyan-500 h-2 rounded-full"
+                    style={{ width: `${(barangay.hectares / Math.max(...barangayData.map(b => b.hectares))) * 100}%` }}
+                  ></div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
-              <div className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border-l-4 border-yellow-500">
-                  <h4 className="font-semibold text-yellow-900 mb-2">Crop Diversity</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    {cropDistribution.length > 0 && (
-                      <>
-                        <strong>{cropDistribution[0].name}</strong> is the most popular crop with <strong>{cropDistribution[0].count}</strong> farmers, 
-                        representing strong market demand and farmer preference in the region.
-                      </>
-                    )}
-                  </p>
-                </div>
+      {/* Executive Summary */}
+      <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-white/50">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <FaFileAlt className="text-purple-600" />
+          Executive Summary
+        </h3>
+        <div className="prose prose-sm max-w-none">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500">
+                <h4 className="font-semibold text-green-900 mb-2">Agricultural Overview</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Currently monitoring <strong>{summaryStats.totalFarmers}</strong> farmers across <strong>{barangays.length}</strong> barangays,
+                  cultivating a total of <strong>{summaryStats.totalHectares} hectares</strong> with <strong>{summaryStats.totalVegetables}</strong> different
+                  crop varieties. The average farm size is <strong>{summaryStats.avgFarmSize} hectares</strong>.
+                </p>
+              </div>
 
-                <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500">
-                  <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
-                  <ul className="text-sm text-gray-700 leading-relaxed list-disc list-inside space-y-1">
-                    <li>Focus support on high-performing barangays</li>
-                    <li>Encourage crop diversification in monoculture areas</li>
-                    <li>Provide training for farmers below average production</li>
-                    <li>Monitor seasonal trends for better planning</li>
-                  </ul>
-                </div>
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border-l-4 border-blue-500">
+                <h4 className="font-semibold text-blue-900 mb-2">Top Performers</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {barangayData.length > 0 && (
+                    <>
+                      <strong>{barangayData[0].name}</strong> leads in production with <strong>{barangayData[0].hectares.toFixed(2)} hectares</strong>,
+                      followed by {barangayData.length > 1 && <><strong>{barangayData[1].name}</strong> ({barangayData[1].hectares.toFixed(2)} ha)</>}.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border-l-4 border-yellow-500">
+                <h4 className="font-semibold text-yellow-900 mb-2">Crop Diversity</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {cropDistribution.length > 0 && (
+                    <>
+                      <strong>{cropDistribution[0].name}</strong> is the most popular crop with <strong>{cropDistribution[0].count}</strong> farmers,
+                      representing strong market demand and farmer preference in the region.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500">
+                <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
+                <ul className="text-sm text-gray-700 leading-relaxed list-disc list-inside space-y-1">
+                  <li>Focus support on high-performing barangays</li>
+                  <li>Encourage crop diversification in monoculture areas</li>
+                  <li>Provide training for farmers below average production</li>
+                  <li>Monitor seasonal trends for better planning</li>
+                </ul>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Print Styles */}
       <style>{`
         @media print {
           body * {
             visibility: hidden;
           }
-          .print-area, .print-area * {
+          .print\\:block, .print\\:block * {
             visibility: visible;
           }
-          .print-area {
+          .print\\:block {
             position: absolute;
             left: 0;
             top: 0;
@@ -928,7 +1035,14 @@ const Reports = () => {
   );
 };
 
-const StatCard = ({ title, value, icon, color }) => (
+const PrintStat = ({ title, value }) => (
+  <div className="border border-gray-200 rounded-lg p-3 text-center bg-gray-50">
+    <p className="text-xs text-gray-500 uppercase tracking-wide">{title}</p>
+    <p className="text-xl font-bold text-gray-900">{value}</p>
+  </div>
+);
+
+const StatCard = ({ title, value, unit, icon, color }) => (
   <div className={`bg-gradient-to-br ${color} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}>
     <div className="flex items-center justify-between">
       <div>

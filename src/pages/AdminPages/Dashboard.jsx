@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ReactApexChart from 'react-apexcharts';
+import Loading from '../../components/Loading';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://backend-3-fl3e.onrender.com';
 
 const Dashboard = () => {
   // Core state
@@ -15,21 +16,21 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
-  
+
   // Chart state
   const [chartCommodity, setChartCommodity] = useState('');
   const [selectedWeekRange, setSelectedWeekRange] = useState('1-5');
-  
+
   // Comparison state
   const [comparisonCommodities, setComparisonCommodities] = useState([]);
   const [comparisonDataType, setComparisonDataType] = useState('volume');
-  
+
   // Model management states
   const [modelInfo, setModelInfo] = useState(null);
   const [showModelManager, setShowModelManager] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  
+
   // Notification state
   const [notifications, setNotifications] = useState([]);
 
@@ -38,13 +39,33 @@ const Dashboard = () => {
   const [overviewCommodityFilter, setOverviewCommodityFilter] = useState('all');
   const [overviewDataView, setOverviewDataView] = useState('volume'); // 'volume' or 'price'
 
+  // NEW: Training State
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingLogs, setTrainingLogs] = useState([]);
+  const logsEndRef = React.useRef(null);
+  const wsRef = React.useRef(null);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [trainingLogs]);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
   // ============================================================================
   // UTILITY FUNCTIONS
   // ============================================================================
 
   const formatPeriod = (item, mode) => {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     if (mode === 'yearly') {
       return `${item.year}`;
     } else if (mode === 'monthly') {
@@ -57,7 +78,7 @@ const Dashboard = () => {
   const addNotification = (message, type = 'info') => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message, type }]);
-    
+
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
@@ -117,7 +138,7 @@ const Dashboard = () => {
     if (!dashboardData) return null;
 
     let filteredData = dashboardData.volume_data;
-    
+
     // Apply filters
     if (overviewYearFilter !== 'all') {
       filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
@@ -152,10 +173,10 @@ const Dashboard = () => {
     });
 
     // Calculate completeness
-    const expectedCommodities = overviewCommodityFilter === 'all' 
-      ? dashboardData.commodities.length 
+    const expectedCommodities = overviewCommodityFilter === 'all'
+      ? dashboardData.commodities.length
       : 1;
-    
+
     result.forEach(item => {
       const actualCommodities = Object.keys(item.commodities).length;
       item.completeness = (actualCommodities / expectedCommodities) * 100;
@@ -169,7 +190,7 @@ const Dashboard = () => {
     if (!dashboardData) return null;
 
     let filteredData = dashboardData.price_data;
-    
+
     // Apply filters
     if (overviewYearFilter !== 'all') {
       filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
@@ -206,15 +227,15 @@ const Dashboard = () => {
     });
 
     // Calculate completeness and averages
-    const expectedCommodities = overviewCommodityFilter === 'all' 
-      ? dashboardData.commodities.length 
+    const expectedCommodities = overviewCommodityFilter === 'all'
+      ? dashboardData.commodities.length
       : 1;
-    
+
     result.forEach(item => {
       const actualCommodities = Object.keys(item.commodities).length;
       item.completeness = (actualCommodities / expectedCommodities) * 100;
       item.missingCommodities = expectedCommodities - actualCommodities;
-      
+
       // Calculate overall averages for the week
       const prices = Object.values(item.commodities);
       if (prices.length > 0) {
@@ -240,7 +261,7 @@ const Dashboard = () => {
     setLoading(true);
     setError(null);
     addNotification('Generating forecast...', 'info');
-    
+
     try {
       const requestBody = {
         commodity: selectedCommodity,
@@ -266,6 +287,101 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  // ============================================================================
+  // TRAINING HANDLING
+  // ============================================================================
+
+  const startTraining = async () => {
+    if (isTraining) return;
+
+    setIsTraining(true);
+    setTrainingLogs(['Starting training process...', 'Connecting to server...']);
+    setActiveTab('training'); // Switch to training tab
+
+    try {
+      // 1. Trigger Training Background Task
+      await axios.post(`${API_BASE_URL}/api/start_training`);
+
+      // 2. Connect WebSocket for logs
+      // Note: In production, use wss:// for secure connection
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/training';
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setTrainingLogs(prev => [...prev, '✅ Connected to Training Server']);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'log') {
+          setTrainingLogs(prev => [...prev, data.message]);
+        } else if (data.type === 'status') {
+          setIsTraining(data.is_training);
+          if (!data.is_training) {
+            ws.close();
+            addNotification('Training Completed!', 'success');
+            fetchModelInfo(); // Refresh model info
+          }
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        setTrainingLogs(prev => [...prev, '❌ Connection Error']);
+        setIsTraining(false);
+      };
+
+      ws.onclose = () => {
+        setTrainingLogs(prev => [...prev, 'Connection closed']);
+      };
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+      setIsTraining(false);
+      addNotification('Failed to start training', 'error');
+      setTrainingLogs(prev => [...prev, `❌ Error: ${err.message}`]);
+    }
+  };
+
+  const handleUploadAndTrain = async () => {
+    if (!uploadFile) {
+      alert('Please select a file first');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+
+    try {
+      setUploadProgress(10);
+      const response = await axios.post(`${API_BASE_URL}/api/upload_dataset`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
+      });
+
+      const { rows, commodities, columns } = response.data;
+      addNotification(`✅ Valid Dataset: ${rows} rows, ${commodities} commodities`, 'success');
+      alert(`Dataset Validated Successfully!\n\nDetails:\n- Rows: ${rows}\n- Commodities: ${commodities}\n- Columns: ${columns.join(', ')}\n\nStarting training now...`);
+
+      // Auto-start training after upload
+      setTimeout(() => startTraining(), 1000);
+
+    } catch (err) {
+      console.error(err);
+      const errorDetail = err.response?.data?.detail || 'Upload failed';
+      addNotification(`❌ Error: ${errorDetail}`, 'error');
+      alert(`Dataset Validation Failed ❌\n\nReason: ${errorDetail}`);
+      setUploadProgress(0);
+      setUploadFile(null); // Reset file if invalid
+    }
+  };
+
 
   // ============================================================================
   // FILE UPLOAD HANDLING
@@ -343,7 +459,7 @@ CONFIG = {
 
   const exportForecastToCSV = () => {
     if (!forecastResult) return;
-    
+
     const csvRows = [
       ['Period', 'Year', 'Month', 'Week', 'Value', 'Type'],
       ...forecastResult.forecast_data.map(item => [
@@ -355,7 +471,7 @@ CONFIG = {
         'Forecast'
       ])
     ];
-    
+
     const csvContent = csvRows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -418,24 +534,36 @@ CONFIG = {
 
     const weeks = getWeeksInRange();
     const [startWeek] = selectedWeekRange.split('-').map(Number);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    const volumeData = weeks.map((weekLabel, index) => {
+    const categories = [];
+    const volumeData = [];
+    const priceData = [];
+
+    weeks.forEach((weekLabel, index) => {
       const weekNumber = startWeek + index;
-      const dataPoint = dashboardData.volume_data.find(
+
+      const volItem = dashboardData.volume_data.find(
         item => item.commodity === chartCommodity && item.week === weekNumber
       );
-      return dataPoint ? dataPoint.volume : 0;
-    });
 
-    const priceData = weeks.map((weekLabel, index) => {
-      const weekNumber = startWeek + index;
-      const dataPoint = dashboardData.price_data.find(
+      const priceItem = dashboardData.price_data.find(
         item => item.commodity === chartCommodity && item.week === weekNumber
       );
-      return dataPoint ? dataPoint.average_price : 0;
+
+      volumeData.push(volItem ? volItem.volume : 0);
+      priceData.push(priceItem ? priceItem.average_price : 0);
+
+      const item = volItem || priceItem;
+      if (item && item.month && item.year) {
+        // Multi-line label for Axis
+        categories.push([`Week ${weekNumber}`, `${monthNames[item.month - 1]} ${item.year}`]);
+      } else {
+        categories.push(`Week ${weekNumber}`);
+      }
     });
 
-    return { weeks, volumeData, priceData };
+    return { categories, volumeData, priceData };
   };
 
   // ============================================================================
@@ -454,9 +582,9 @@ CONFIG = {
         colors: ['#3b82f6'],
         dataLabels: {
           enabled: true,
-          formatter: function(val) { return val.toFixed(1) + ' Kg'; }
+          formatter: function (val) { return val.toFixed(1) + ' Kg'; }
         },
-        xaxis: { categories: chartData.weeks },
+        xaxis: { categories: chartData.categories },
         yaxis: { title: { text: 'Volume (Kg)' } },
         title: { text: `📦 ${chartCommodity} - Weekly Volume`, align: 'left' }
       }
@@ -475,9 +603,9 @@ CONFIG = {
         colors: ['#10b981'],
         dataLabels: {
           enabled: true,
-          formatter: function(val) { return '₱' + val.toFixed(2); }
+          formatter: function (val) { return '₱' + val.toFixed(2); }
         },
-        xaxis: { categories: chartData.weeks },
+        xaxis: { categories: chartData.categories },
         yaxis: { title: { text: 'Price (₱)' } },
         title: { text: `💰 ${chartCommodity} - Weekly Price`, align: 'left' }
       }
@@ -490,11 +618,11 @@ CONFIG = {
     }
 
     const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
-    
+
     const series = comparisonCommodities.map(commodity => {
       const weeklyData = weeks.map((_, weekIndex) => {
         const weekNumber = weekIndex + 1;
-        
+
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
             item => item.commodity === commodity && item.week === weekNumber
@@ -507,7 +635,7 @@ CONFIG = {
           return dataPoint ? dataPoint.average_price : 0;
         }
       });
-      
+
       return {
         name: commodity,
         data: weeklyData
@@ -533,9 +661,9 @@ CONFIG = {
         },
         dataLabels: {
           enabled: true,
-          formatter: function(val) {
-            return comparisonDataType === 'price' 
-              ? '₱' + val.toFixed(1) 
+          formatter: function (val) {
+            return comparisonDataType === 'price'
+              ? '₱' + val.toFixed(1)
               : val.toFixed(0);
           },
           offsetY: -20,
@@ -553,9 +681,9 @@ CONFIG = {
             style: { fontSize: '14px', fontWeight: 600 }
           },
           labels: {
-            formatter: function(val) {
-              return comparisonDataType === 'price' 
-                ? '₱' + val.toFixed(0) 
+            formatter: function (val) {
+              return comparisonDataType === 'price'
+                ? '₱' + val.toFixed(0)
                 : val.toFixed(0);
             }
           }
@@ -576,9 +704,9 @@ CONFIG = {
           shared: true,
           intersect: false,
           y: {
-            formatter: function(val) {
-              return comparisonDataType === 'price' 
-                ? '₱' + val.toFixed(2) 
+            formatter: function (val) {
+              return comparisonDataType === 'price'
+                ? '₱' + val.toFixed(2)
                 : val.toFixed(2) + ' Kg';
             }
           }
@@ -594,11 +722,11 @@ CONFIG = {
     }
 
     const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
-    
+
     const series = comparisonCommodities.map(commodity => {
       const weeklyData = weeks.map((_, weekIndex) => {
         const weekNumber = weekIndex + 1;
-        
+
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
             item => item.commodity === commodity && item.week === weekNumber
@@ -611,7 +739,7 @@ CONFIG = {
           return dataPoint ? dataPoint.average_price : null;
         }
       });
-      
+
       return {
         name: commodity,
         data: weeklyData
@@ -640,10 +768,10 @@ CONFIG = {
             style: { fontSize: '14px', fontWeight: 600 }
           },
           labels: {
-            formatter: function(val) {
+            formatter: function (val) {
               if (val === null) return '';
-              return comparisonDataType === 'price' 
-                ? '₱' + val.toFixed(0) 
+              return comparisonDataType === 'price'
+                ? '₱' + val.toFixed(0)
                 : val.toFixed(0);
             }
           }
@@ -658,10 +786,10 @@ CONFIG = {
           shared: true,
           intersect: false,
           y: {
-            formatter: function(val) {
+            formatter: function (val) {
               if (val === null) return 'No data';
-              return comparisonDataType === 'price' 
-                ? '₱' + val.toFixed(2) 
+              return comparisonDataType === 'price'
+                ? '₱' + val.toFixed(2)
                 : val.toFixed(2) + ' Kg';
             }
           }
@@ -675,7 +803,7 @@ CONFIG = {
     if (!dashboardData || !chartCommodity) return { series: [], options: {} };
 
     const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
-    
+
     const volumeData = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.volume_data.find(
@@ -727,7 +855,7 @@ CONFIG = {
             axisBorder: { show: true, color: '#3b82f6' },
             labels: {
               style: { colors: '#3b82f6' },
-              formatter: function(val) { return val.toFixed(0) + ' Kg'; }
+              formatter: function (val) { return val.toFixed(0) + ' Kg'; }
             },
             title: {
               text: 'Volume (Kg)',
@@ -740,7 +868,7 @@ CONFIG = {
             axisBorder: { show: true, color: '#10b981' },
             labels: {
               style: { colors: '#10b981' },
-              formatter: function(val) { return '₱' + val.toFixed(0); }
+              formatter: function (val) { return '₱' + val.toFixed(0); }
             },
             title: {
               text: 'Price (₱)',
@@ -757,8 +885,8 @@ CONFIG = {
           shared: true,
           intersect: false,
           y: [
-            { formatter: function(val) { return val.toFixed(2) + ' Kg'; } },
-            { formatter: function(val) { return '₱' + val.toFixed(2); } }
+            { formatter: function (val) { return val.toFixed(2) + ' Kg'; } },
+            { formatter: function (val) { return '₱' + val.toFixed(2); } }
           ]
         },
         legend: { horizontalAlign: 'left', offsetX: 40 }
@@ -770,7 +898,7 @@ CONFIG = {
     if (!dashboardData || !chartCommodity) return { series: [], options: {} };
 
     const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
-    
+
     const lowestPrices = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
@@ -806,7 +934,7 @@ CONFIG = {
             dataLabels: {
               total: {
                 enabled: true,
-                formatter: function(val) { return '₱' + val.toFixed(0); },
+                formatter: function (val) { return '₱' + val.toFixed(0); },
                 style: { fontSize: '12px', fontWeight: 900 }
               }
             }
@@ -817,7 +945,7 @@ CONFIG = {
         xaxis: { categories: weeks, title: { text: 'Week Number' } },
         yaxis: {
           title: { text: 'Price (₱)' },
-          labels: { formatter: function(val) { return '₱' + val.toFixed(0); } }
+          labels: { formatter: function (val) { return '₱' + val.toFixed(0); } }
         },
         title: {
           text: `💰 ${chartCommodity} - Weekly Price Range Breakdown`,
@@ -825,7 +953,7 @@ CONFIG = {
           style: { fontSize: '18px', fontWeight: 'bold' }
         },
         tooltip: {
-          y: { formatter: function(val) { return '₱' + val.toFixed(2); } }
+          y: { formatter: function (val) { return '₱' + val.toFixed(2); } }
         },
         fill: { opacity: 1 },
         legend: { position: 'top', horizontalAlign: 'left', offsetX: 40 }
@@ -900,14 +1028,7 @@ CONFIG = {
   // ============================================================================
 
   if (!dashboardData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <Loading text="Loading dashboard data..." />;
   }
 
   // Get available years for filter
@@ -927,11 +1048,10 @@ CONFIG = {
         {notifications.map(notif => (
           <div
             key={notif.id}
-            className={`px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in ${
-              notif.type === 'success' ? 'bg-green-500 text-white' :
+            className={`px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in ${notif.type === 'success' ? 'bg-green-500 text-white' :
               notif.type === 'error' ? 'bg-red-500 text-white' :
-              'bg-blue-500 text-white'
-            }`}
+                'bg-blue-500 text-white'
+              }`}
           >
             <span className="text-xl">
               {notif.type === 'success' ? '✅' : notif.type === 'error' ? '❌' : 'ℹ️'}
@@ -1032,8 +1152,8 @@ CONFIG = {
             <h2 className="text-xl font-bold text-gray-900">🔮 Advanced Forecast Controls</h2>
             {selectedCommodity && (
               <div className="text-sm">
-                {modelInfo?.models?.find(m => 
-                  m.commodity.toLowerCase() === selectedCommodity.toLowerCase() && 
+                {modelInfo?.models?.find(m =>
+                  m.commodity.toLowerCase() === selectedCommodity.toLowerCase() &&
                   m.data_type === selectedDataType
                 ) ? (
                   <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full font-semibold">
@@ -1047,7 +1167,7 @@ CONFIG = {
               </div>
             )}
           </div>
-          
+
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
@@ -1127,43 +1247,48 @@ CONFIG = {
             <nav className="flex space-x-8 px-6">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'overview'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 📊 Overview
               </button>
               <button
                 onClick={() => setActiveTab('commodity')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'commodity'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'commodity'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 📈 Commodity Charts
               </button>
               <button
                 onClick={() => setActiveTab('comparison')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'comparison'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'comparison'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 📊 Multi-Commodity Comparison
               </button>
               <button
                 onClick={() => setActiveTab('forecast')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'forecast'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'forecast'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 🔮 Forecast Results
+              </button>
+              <button
+                onClick={() => setActiveTab('training')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'training'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                🏋️ Training & Models
               </button>
             </nav>
           </div>
@@ -1178,7 +1303,7 @@ CONFIG = {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
-                      <select 
+                      <select
                         value={overviewYearFilter}
                         onChange={(e) => setOverviewYearFilter(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -1191,7 +1316,7 @@ CONFIG = {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Commodity</label>
-                      <select 
+                      <select
                         value={overviewCommodityFilter}
                         onChange={(e) => setOverviewCommodityFilter(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -1205,23 +1330,21 @@ CONFIG = {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">View Type</label>
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           onClick={() => setOverviewDataView('volume')}
-                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                            overviewDataView === 'volume' 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-white text-gray-700 border border-gray-300'
-                          }`}
+                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${overviewDataView === 'volume'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-700 border border-gray-300'
+                            }`}
                         >
                           📦 Volume
                         </button>
-                        <button 
+                        <button
                           onClick={() => setOverviewDataView('price')}
-                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                            overviewDataView === 'price' 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-white text-gray-700 border border-gray-300'
-                          }`}
+                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${overviewDataView === 'price'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-white text-gray-700 border border-gray-300'
+                            }`}
                         >
                           💰 Price
                         </button>
@@ -1249,7 +1372,7 @@ CONFIG = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -1267,7 +1390,7 @@ CONFIG = {
                           {analyzeVolumeData.map((item, idx) => {
                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                             const isComplete = item.completeness === 100;
-                            
+
                             return (
                               <tr key={idx} className={`hover:bg-blue-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1298,7 +1421,7 @@ CONFIG = {
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                                        <div 
+                                        <div
                                           className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
                                           style={{ width: `${item.completeness}%` }}
                                         ></div>
@@ -1380,7 +1503,7 @@ CONFIG = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -1399,7 +1522,7 @@ CONFIG = {
                           {analyzePriceData.map((item, idx) => {
                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                             const isComplete = item.completeness === 100;
-                            
+
                             return (
                               <tr key={idx} className={`hover:bg-green-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1437,7 +1560,7 @@ CONFIG = {
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                       <div className="w-24 bg-gray-200 rounded-full h-2">
-                                        <div 
+                                        <div
                                           className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
                                           style={{ width: `${item.completeness}%` }}
                                         ></div>
@@ -1512,6 +1635,160 @@ CONFIG = {
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TRAINING TAB */}
+            {activeTab === 'training' && (
+              <div className="space-y-8">
+                {/* 1. Upload & Controls */}
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">🚀 Train New Models</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* File Upload Area */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-4">
+                        1. Upload Training Dataset (CSV)
+                      </label>
+
+                      <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <span className="text-4xl mb-3">📄</span>
+                            <p className="mb-2 text-sm text-gray-500">
+                              <span className="font-semibold">Click to upload</span> or drag and drop
+                            </p>
+                            <p className="text-xs text-gray-500">CSV file with: Date, Commodity, Volume, Price</p>
+                            {uploadFile && (
+                              <div className="mt-4 px-4 py-2 bg-green-100 text-green-800 rounded-lg flex items-center gap-2">
+                                <span>✅ {uploadFile.name}</span>
+                              </div>
+                            )}
+                          </div>
+                          <input type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
+                        </label>
+                      </div>
+
+                      {/* Progress Bar */}
+                      {uploadProgress > 0 && (
+                        <div className="mt-4">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium text-blue-700">Uploading...</span>
+                            <span className="text-sm font-medium text-blue-700">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions Area */}
+                    <div className="flex flex-col justify-center space-y-4">
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            ⚠️
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-yellow-700">
+                              Training takes about <strong>15-30 minutes</strong>.
+                              The system will train models for ALL 18 commodities (Price & Volume).
+                              Please do not close this tab while training.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleUploadAndTrain}
+                        disabled={isTraining || !uploadFile}
+                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 border border-transparent text-lg font-medium rounded-lg text-white shadow-sm transition-all
+                          ${isTraining
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : !uploadFile
+                              ? 'bg-gray-300 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.02]'
+                          }`}
+                      >
+                        {isTraining ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            Training in Progress...
+                          </>
+                        ) : (
+                          <>
+                            <span>🚀</span>
+                            Start Training Pipeline
+                          </>
+                        )}
+                      </button>
+
+                      {!uploadFile && (
+                        <p className="text-center text-sm text-gray-500">Please upload a CSV file to enable training</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Terminal Output */}
+                <div className="bg-gray-900 rounded-lg shadow-xl overflow-hidden border border-gray-700">
+                  <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex justify-between items-center">
+                    <span className="text-gray-300 font-mono text-sm">🖥️ Training Logs (Live Stream)</span>
+                    {isTraining && (
+                      <span className="flex items-center gap-2 px-2 py-1 bg-green-900/50 rounded text-green-400 text-xs animate-pulse">
+                        ● Live
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 h-96 overflow-y-auto font-mono text-xs sm:text-sm text-green-400 space-y-1">
+                    {trainingLogs.length === 0 ? (
+                      <div className="text-gray-500 italic text-center mt-20">Waiting for training to start...</div>
+                    ) : (
+                      trainingLogs.map((log, index) => (
+                        <div key={index} className="break-words border-l-2 border-transparent hover:border-green-600 pl-2">
+                          <span className="opacity-50 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                          {log}
+                        </div>
+                      ))
+                    )}
+                    <div ref={logsEndRef} />
+                  </div>
+                </div>
+
+                {/* 3. Results Gallery */}
+                {!isTraining && trainingLogs.length > 0 && (
+                  <div className="bg-white rounded-lg p-6 border border-gray-200 animate-fade-in">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">📊 Generated Training Visualization</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {dashboardData.commodities.map(commodity => (
+                        <div key={commodity} className="space-y-4">
+                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-gray-50 px-3 py-2 border-b text-sm font-semibold">{commodity} - Price</div>
+                            <img
+                              src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_price_training.png`}
+                              alt={`${commodity} Price`}
+                              className="w-full h-48 object-cover cursor-pointer hover:opacity-90"
+                              onError={(e) => { e.target.style.display = 'none' }}
+                              onClick={() => window.open(e.target.src, '_blank')}
+                            />
+                          </div>
+                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-gray-50 px-3 py-2 border-b text-sm font-semibold">{commodity} - Volume</div>
+                            <img
+                              src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_volume_training.png`}
+                              alt={`${commodity} Volume`}
+                              className="w-full h-48 object-cover cursor-pointer hover:opacity-90"
+                              onError={(e) => { e.target.style.display = 'none' }}
+                              onClick={() => window.open(e.target.src, '_blank')}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1601,16 +1878,15 @@ CONFIG = {
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Commodities to Compare</h3>
-                  
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     {dashboardData.commodities.slice(0, 8).map(commodity => (
                       <label
                         key={commodity}
-                        className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all border-2 ${
-                          comparisonCommodities.includes(commodity)
-                            ? 'bg-blue-100 border-blue-500 shadow-md'
-                            : 'bg-white border-gray-200 hover:border-blue-300'
-                        }`}
+                        className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all border-2 ${comparisonCommodities.includes(commodity)
+                          ? 'bg-blue-100 border-blue-500 shadow-md'
+                          : 'bg-white border-gray-200 hover:border-blue-300'
+                          }`}
                       >
                         <input
                           type="checkbox"

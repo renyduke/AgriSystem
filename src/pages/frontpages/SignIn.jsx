@@ -39,7 +39,7 @@ export function SignIn() {
         const position = userData.position;
 
         setLocalReply({ type: "success", message: "Login successful!" });
-        
+
         // Redirect based on position using React Router
         setTimeout(() => {
           if (position === "admin") {
@@ -60,7 +60,7 @@ export function SignIn() {
       }
     } catch (error) {
       console.error("Login error:", error.message);
-      
+
       // User-friendly error messages
       let errorMessage = "Login failed. Please try again.";
       if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
@@ -72,7 +72,7 @@ export function SignIn() {
       } else if (error.code === "auth/network-request-failed") {
         errorMessage = "Network error. Check your connection.";
       }
-      
+
       setError(errorMessage);
       setLocalReply({ type: "error", message: errorMessage });
       setTimeout(() => setLocalReply(null), 3000);
@@ -100,11 +100,10 @@ export function SignIn() {
       {/* Success/Error Toast Notification */}
       {localReply && (
         <div
-          className={`fixed top-6 right-6 p-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in-right backdrop-blur-sm ${
-            localReply.type === "success" 
-              ? "bg-green-50 text-green-800 border-2 border-green-200" 
+          className={`fixed top-6 right-6 p-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in-right backdrop-blur-sm ${localReply.type === "success"
+              ? "bg-green-50 text-green-800 border-2 border-green-200"
               : "bg-red-50 text-red-800 border-2 border-red-200"
-          }`}
+            }`}
         >
           <div className={`p-2 rounded-full ${localReply.type === "success" ? "bg-green-100" : "bg-red-100"}`}>
             {localReply.type === "success" ? (
@@ -120,15 +119,15 @@ export function SignIn() {
       {/* Main Card */}
       <div className="relative w-full max-w-md">
         <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 animate-pulse-slow"></div>
-        
+
         <div className="relative bg-white/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-white/20">
           {/* Logo and Header */}
           <div className="text-center mb-8">
             <div className="relative inline-block mb-4">
               <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full blur-md opacity-50"></div>
-              <img 
-                src={logo} 
-                alt="Agri Logo" 
+              <img
+                src={logo}
+                alt="Agri Logo"
                 className="relative w-20 h-20 mx-auto rounded-full border-4 border-white shadow-lg"
               />
             </div>
@@ -156,20 +155,18 @@ export function SignIn() {
                 Email Address
               </label>
               <div className="relative">
-                <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
-                  focusedInput === 'email' ? 'text-green-500' : 'text-gray-400'
-                }`}>
+                <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${focusedInput === 'email' ? 'text-green-500' : 'text-gray-400'
+                  }`}>
                   <FaEnvelope className="text-lg" />
                 </div>
                 <input
                   id="email"
                   type="email"
                   placeholder="name@example.com"
-                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
-                    focusedInput === 'email'
+                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${focusedInput === 'email'
                       ? 'border-green-500 bg-white shadow-lg shadow-green-100'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => setFocusedInput('email')}
@@ -186,20 +183,18 @@ export function SignIn() {
                 Password
               </label>
               <div className="relative">
-                <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${
-                  focusedInput === 'password' ? 'text-green-500' : 'text-gray-400'
-                }`}>
+                <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors ${focusedInput === 'password' ? 'text-green-500' : 'text-gray-400'
+                  }`}>
                   <FaLock className="text-lg" />
                 </div>
                 <input
                   id="password"
                   type={passwordShown ? "text" : "password"}
                   placeholder="Enter your password"
-                  className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${
-                    focusedInput === 'password'
+                  className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${focusedInput === 'password'
                       ? 'border-green-500 bg-white shadow-lg shadow-green-100'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => setFocusedInput('password')}
@@ -238,11 +233,10 @@ export function SignIn() {
             {/* Submit Button */}
             <button
               type="submit"
-              className={`w-full py-3.5 px-6 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 transform ${
-                loading
+              className={`w-full py-3.5 px-6 rounded-xl font-semibold text-white shadow-lg transition-all duration-300 transform ${loading
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
-              }`}
+                }`}
               disabled={loading}
             >
               {loading ? (
@@ -265,7 +259,7 @@ export function SignIn() {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-600">
               Don't have an account?{" "}
-              <button 
+              <button
                 onClick={navigateToSignUp}
                 className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors"
                 disabled={loading}
@@ -333,7 +327,6 @@ const styles = `
   }
 `;
 
-// Inject styles
 if (typeof document !== "undefined") {
   const styleSheet = document.createElement("style");
   styleSheet.textContent = styles;

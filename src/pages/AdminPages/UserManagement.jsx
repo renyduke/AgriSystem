@@ -4,6 +4,7 @@ import { doc, setDoc, collection, getDocs, updateDoc, deleteDoc } from "firebase
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { FaUser, FaSpinner, FaPlus, FaEdit, FaTrash, FaEye, FaEyeSlash } from "react-icons/fa";
+import { supabase } from "../../supabase/supabaseClient";
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -11,9 +12,9 @@ const UserManagement = () => {
   const [error, setError] = useState("");
   const [editingUser, setEditingUser] = useState(null);
   const [addingUser, setAddingUser] = useState(false);
-  const [newUser, setNewUser] = useState({ 
-    fullName: "", 
-    email: "", 
+  const [newUser, setNewUser] = useState({
+    fullName: "",
+    email: "",
     position: "collector",
     password: "",
     confirmPassword: ""
@@ -43,7 +44,7 @@ const UserManagement = () => {
   }, []);
 
   const handleEdit = (user) => setEditingUser({ ...user });
-  
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
@@ -61,10 +62,26 @@ const UserManagement = () => {
     }
   };
 
-  const handleDelete = async (userId) => {
+  const handleDelete = async (user) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
       try {
-        await deleteDoc(doc(db, "users", userId));
+        // 1. Delete from Firebase Firestore
+        await deleteDoc(doc(db, "users", user.id));
+
+        // 2. If user is a collector, delete from Supabase 'users' table
+        // We assume 'username' in Supabase matches the 'email' in Firestore for collectors
+        if (user.position === "collector") {
+          const { error: supabaseError } = await supabase
+            .from("users")
+            .delete()
+            .eq("username", user.email);
+
+          if (supabaseError) {
+            console.error("Error deleting from Supabase:", supabaseError);
+            alert("User deleted from Firebase but failed to delete from Supabase (Mobile App).");
+          }
+        }
+
         fetchUsers();
         alert("User deleted successfully!");
       } catch (err) {
@@ -75,18 +92,18 @@ const UserManagement = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Special handling for fullName field
     if (name === "fullName") {
       // Only allow letters and spaces
       const lettersOnly = value.replace(/[^a-zA-Z\s]/g, '');
-      
+
       // Capitalize first letter after each space
       const capitalized = lettersOnly
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
-      
+
       setEditingUser({ ...editingUser, [name]: capitalized });
     } else {
       setEditingUser({ ...editingUser, [name]: value });
@@ -95,18 +112,18 @@ const UserManagement = () => {
 
   const handleNewUserChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Special handling for fullName field
     if (name === "fullName") {
       // Only allow letters and spaces
       const lettersOnly = value.replace(/[^a-zA-Z\s]/g, '');
-      
+
       // Capitalize first letter after each space
       const capitalized = lettersOnly
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
-      
+
       setNewUser({ ...newUser, [name]: capitalized });
     } else {
       setNewUser({ ...newUser, [name]: value });
@@ -115,34 +132,81 @@ const UserManagement = () => {
 
   const handleAddUser = async (e) => {
     e.preventDefault();
-    
+
     if (newUser.password !== newUser.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
+    setLoading(true);
+
     try {
-      // Create user with Firebase Authentication
+      let emailToRegister = newUser.email;
+      let usernameToStore = newUser.email; // Default for admin
+
+      // 1. If user is a COLLECTOR
+      if (newUser.position.toLowerCase() === "collector") {
+        // Treat input as USERNAME
+        // Append dummy domain for Firebase Auth (which requires email)
+        emailToRegister = `${newUser.email}@agrimap.collector`;
+        usernameToStore = newUser.email;
+
+        // Check if username exists in Supabase
+        const { data: existingUser, error: checkError } = await supabase
+          .from("users")
+          .select("username")
+          .eq("username", usernameToStore)
+          .maybeSingle();
+
+        if (checkError) throw new Error("Supabase check error: " + checkError.message);
+
+        if (existingUser) {
+          setError(`Username "${usernameToStore}" already exists in Collector database.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Create user with Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        newUser.email,
+        emailToRegister,
         newUser.password
       );
       const user = userCredential.user;
 
-      // Use setDoc to store user data with UID as document ID
+      // 3. Store user data in Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         fullName: newUser.fullName,
-        email: newUser.email,
+        email: emailToRegister, // Stores the @agrimap.collector email
+        username: usernameToStore, // Stores the raw username for reference
         position: newUser.position.toLowerCase(),
         createdAt: new Date().toISOString()
       });
 
+      // 4. If user is a COLLECTOR, add to Supabase 'users' table
+      if (newUser.position.toLowerCase() === "collector") {
+        const { error: insertError } = await supabase
+          .from("users")
+          .insert([
+            {
+              username: usernameToStore, // Plain username
+              password: newUser.password,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+
+        if (insertError) {
+          console.error("Supabase insert error:", insertError);
+          alert("Warning: User created in Firebase but failed to create in Supabase.");
+        }
+      }
+
       setAddingUser(false);
-      setNewUser({ 
-        fullName: "", 
-        email: "", 
+      setNewUser({
+        fullName: "",
+        email: "",
         position: "collector",
         password: "",
         confirmPassword: ""
@@ -152,7 +216,14 @@ const UserManagement = () => {
       fetchUsers();
       alert("User added successfully!");
     } catch (err) {
-      setError("Error adding user: " + err.message);
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError("This username/email is already taken.");
+      } else {
+        setError("Error adding user: " + err.message);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -195,7 +266,7 @@ const UserManagement = () => {
             <thead className="bg-gradient-to-r from-green-500 to-green-600 text-white">
               <tr>
                 <th className="p-4 text-left">Full Name</th>
-                <th className="p-4 text-left">Email</th>
+                <th className="p-4 text-left">Username / Email</th>
                 <th className="p-4 text-left">Position</th>
                 <th className="p-4 text-left">Actions</th>
               </tr>
@@ -204,18 +275,20 @@ const UserManagement = () => {
               {users.map((user, index) => (
                 <tr
                   key={user.id}
-                  className={`border-b hover:bg-green-50 transition-colors duration-200 ${
-                    index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                  }`}
+                  className={`border-b hover:bg-green-50 transition-colors duration-200 ${index % 2 === 0 ? "bg-gray-50" : "bg-white"
+                    }`}
                 >
                   <td className="p-4">{user.fullName}</td>
-                  <td className="p-4">{user.email}</td>
+                  <td className="p-4 font-mono text-sm">
+                    {user.position === 'collector' && user.username
+                      ? user.username
+                      : user.email}
+                  </td>
                   <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      user.position === "admin" 
-                        ? "bg-blue-100 text-blue-800" 
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${user.position === "admin"
+                        ? "bg-blue-100 text-blue-800"
                         : "bg-green-100 text-green-800"
-                    }`}>
+                      }`}>
                       {user.position}
                     </span>
                   </td>
@@ -228,7 +301,7 @@ const UserManagement = () => {
                       <FaEdit className="mr-1" /> Edit
                     </button>
                     <button
-                      onClick={() => handleDelete(user.id)}
+                      onClick={() => handleDelete(user)}
                       className="flex items-center bg-red-500 text-white px-3 py-1.5 rounded-lg 
                         hover:bg-red-600 transition-all duration-300 shadow-sm hover:shadow-md"
                     >
@@ -245,11 +318,11 @@ const UserManagement = () => {
         {editingUser && (
           <>
             {/* Backdrop with blur */}
-            <div 
+            <div
               className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 animate-fade-in"
               onClick={() => setEditingUser(null)}
             ></div>
-            
+
             {/* Modal */}
             <div className="fixed inset-0 flex items-center justify-center p-4 z-50 pointer-events-none">
               <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl pointer-events-auto animate-scale-in">
@@ -325,11 +398,11 @@ const UserManagement = () => {
         {addingUser && (
           <>
             {/* Backdrop with blur */}
-            <div 
+            <div
               className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 animate-fade-in"
               onClick={() => setAddingUser(false)}
             ></div>
-            
+
             {/* Modal */}
             <div className="fixed inset-0 flex items-center justify-center p-4 z-50 pointer-events-none">
               <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl pointer-events-auto animate-scale-in max-h-[90vh] overflow-y-auto">
@@ -354,15 +427,15 @@ const UserManagement = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Email
+                      {newUser.position === 'collector' ? 'Username' : 'Email'}
                     </label>
                     <input
-                      type="email"
+                      type={newUser.position === 'collector' ? "text" : "email"}
                       name="email"
                       value={newUser.email}
                       onChange={handleNewUserChange}
                       className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                      placeholder="Email"
+                      placeholder={newUser.position === 'collector' ? "Enter username" : "Enter email address"}
                       required
                     />
                   </div>
