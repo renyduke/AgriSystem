@@ -1,0 +1,56 @@
+﻿
+       summary               unimported v1.31.0 (node)
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+       entry file          : src/main.jsx
+
+       unresolved imports  : 1
+       unused dependencies : 14
+       unimported files    : 12
+
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     Γöé 1 unresolved imports
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+   1 Γöé /logo.png at src\pages\frontpages\SignIn.jsx, src\pages\frontpages\ForgotPassword.jsx, src\pages\AdminPages\SignUp.jsx
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     Γöé 14 unused dependencies
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+   1 Γöé @fortawesome/fontawesome-free
+   2 Γöé @huggingface/inference
+   3 Γöé @material-tailwind/react
+   4 Γöé @tailwindcss/vite
+   5 Γöé jspdf
+   6 Γöé leaflet-routing-machine
+   7 Γöé mapbox-gl
+   8 Γöé maplibre-gl
+   9 Γöé openrouteservice-js
+  10 Γöé qrcode
+  11 Γöé react-calendar
+  12 Γöé react-tooltip
+  13 Γöé recharts
+  14 Γöé tailwindcss
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     Γöé 12 unimported files
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+   1 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\adminComponents\Adminheader.jsx
+   2 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\FarmerRegistration\Footer.jsx
+   3 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\MainComponents\Farmer.jsx
+   4 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\MainComponents\Footer.jsx
+   5 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\MainComponents\Header.jsx
+   6 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\components\MainComponents\RoutingMachine.jsx
+   7 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\hook\useGeoLocation.js
+   8 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\pages\AdminPages\VegetableManagement.jsx
+   9 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\pages\frontpages\LandingPage.jsx
+  10 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\pages\UserPages\Userhome.jsx
+  11 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\profile\Buyer.jsx
+  12 Γöé C:\Users\Joemarie\Desktop\MY CAPSTONE PROJECT - Copy\AgriMap\frontend\src\services\api.js
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+
+       Inspect the results and run npx unimported -u to update ignore lists

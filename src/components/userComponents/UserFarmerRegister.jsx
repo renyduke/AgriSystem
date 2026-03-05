@@ -524,12 +524,7 @@ const FarmerRegister = () => {
                     <option key={vegetable.id} value={vegetable.name}>{vegetable.name}</option>
                   ))}
                 </select>
-                {newCrop.name && vegetables.find(v => v.name === newCrop.name)?.harvestAfter && (
-                  <p className="text-sm text-gray-600 flex items-center">
-                    <FaInfoCircle className="mr-1" />
-                    Expected harvest in {calculateDuration(vegetables.find(v => v.name === newCrop.name).harvestAfter)}
-                  </p>
-                )}
+
               </div>
               <div className="flex items-center border rounded-xl p-3 bg-white relative">
                 <FaCalendarAlt className="text-green-700 mx-2" />

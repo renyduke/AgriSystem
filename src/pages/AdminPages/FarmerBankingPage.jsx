@@ -405,8 +405,8 @@ const FarmerBankingPage = () => {
                     key={farmer.id}
                     onClick={() => setSelectedFarmer(farmer)}
                     className={`p-4 border-b border-gray-100 cursor-pointer transition-colors ${selectedFarmer?.id === farmer.id
-                        ? 'bg-green-50 border-l-4 border-l-green-600'
-                        : 'hover:bg-gray-50'
+                      ? 'bg-green-50 border-l-4 border-l-green-600'
+                      : 'hover:bg-gray-50'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -511,8 +511,8 @@ const FarmerBankingPage = () => {
                                       {trend === 'up' && <FaArrowUp className="text-green-600 mr-1" />}
                                       {trend === 'down' && <FaArrowDown className="text-red-600 mr-1" />}
                                       <span className={`text-sm ${trend === 'up' ? 'text-green-600' :
-                                          trend === 'down' ? 'text-red-600' :
-                                            'text-gray-600'
+                                        trend === 'down' ? 'text-red-600' :
+                                          'text-gray-600'
                                         }`}>
                                         {trend === 'up' ? 'Rising' : trend === 'down' ? 'Falling' : 'Stable'}
                                       </span>
@@ -526,8 +526,8 @@ const FarmerBankingPage = () => {
 
                             {/* Market Recommendation */}
                             <div className={`p-3 rounded-lg flex items-start space-x-2 ${recommendation.type === 'success' ? 'bg-green-50 border border-green-200' :
-                                recommendation.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
-                                  'bg-blue-50 border border-blue-200'
+                              recommendation.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
+                                'bg-blue-50 border border-blue-200'
                               }`}>
                               {recommendation.type === 'success' && <FaCheckCircle className="text-green-600 mt-0.5" />}
                               {recommendation.type === 'warning' && <FaExclamationTriangle className="text-yellow-600 mt-0.5" />}

@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { db } from "../../config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
-import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt, FaFilter, FaDownload, FaCalendarAlt } from "react-icons/fa";
+import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt } from "react-icons/fa";
 import Loading from "../../components/Loading";
 
 // Fix Leaflet default icon
@@ -249,7 +249,11 @@ const AgriDashboard = () => {
   };
 
   if (loading) {
-    return <Loading />;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loading fullScreen={false} text="Loading analytics data..." />
+      </div>
+    );
   }
 
   return (
@@ -262,28 +266,14 @@ const AgriDashboard = () => {
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Analytics Dashboard</h1>
             <p className="text-gray-500 mt-1">Real-time insights on Canlaon's agricultural landscape</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-              <FaCalendarAlt className="mr-2 text-gray-400" />
-              This Month
-            </button>
-            <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-              <FaFilter className="mr-2 text-gray-400" />
-              Filter
-            </button>
-            <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm">
-              <FaDownload className="mr-2" />
-              Export
-            </button>
-          </div>
+
         </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatCard title="Total Farmers" value={totalFarmers} icon={<FaUser />} color="text-blue-600" bg="bg-blue-50" />
           <StatCard title="Crop Varieties" value={totalVegetables} icon={<FaLeaf />} color="text-green-600" bg="bg-green-50" />
           <StatCard title="Total Hectares" value={totalProduction.toFixed(1)} unit="ha" icon={<FaMapMarkedAlt />} color="text-amber-600" bg="bg-amber-50" />
-          <StatCard title="Avg Farm Size" value={averageFarmSize} unit="ha" icon={<FaChartPie />} color="text-purple-600" bg="bg-purple-50" />
         </div>
 
         {/* Charts Section - Row 1 */}

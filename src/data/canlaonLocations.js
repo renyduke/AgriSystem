@@ -54,15 +54,15 @@ const canlaonLocations = {
       { name: "Purok Star Apple", coordinates: [10.433638, 123.215979] },
       { name: "Purok Rambutan", coordinates: [10.426238, 123.219245] },
       { name: "Purok Tambis", coordinates: [10.435983, 123.227080] },
-    ],
+    ],  
   },
   "Malaiba": {
     coordinates: [10.3750, 123.2250],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3752, 123.2248] },
-      { name: "Purok 2", coordinates: [10.3748, 123.2252] },
-      { name: "Sitio I", coordinates: [10.3754, 123.2246] },
-      { name: "Sitio J", coordinates: [10.3746, 123.2254] },
+      { name: "Purok Rose B", coordinates: [10.411244, 123.211548] },
+      { name: "Purok Daisy A(Mapot)", coordinates: [10.423986, 123.177888] },
+      { name: "Purok Orchids", coordinates: [10.422908, 123.207812] },
+      { name: "Purok Everlasting", coordinates: [10.429368, 123.197373] },
     ],
   },
   "Masulog": {

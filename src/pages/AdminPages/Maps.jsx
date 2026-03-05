@@ -10,7 +10,7 @@ import L from "leaflet";
 import "leaflet.motion/dist/leaflet.motion.js";
 import { db } from "../../config/firebaseConfig";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
-import { FaSearch, FaMapMarkerAlt, FaInfoCircle } from "react-icons/fa";
+import { FaSearch, FaMapMarkerAlt, FaInfoCircle, FaUsers, FaExpand, FaCompress } from "react-icons/fa";
 import axios from "axios";
 import { Link } from "react-router-dom";
 
@@ -22,6 +22,8 @@ const Maps = () => {
   const [farmers, setFarmers] = useState([]);
   const [mapRef, setMapRef] = useState(null);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [expandedLocation, setExpandedLocation] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [cursorCoords, setCursorCoords] = useState({ lat: null, lng: null });
@@ -58,45 +60,29 @@ const Maps = () => {
 
   // Fetch farmers data from Firestore...
   useEffect(() => {
-    const unsubscribeFarmers = onSnapshot(collection(db, "farmers"), async (snapshot) => {
-      const farmersData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const unsubscribeFarmers = onSnapshot(collection(db, "farmers"), (snapshot) => {
+      const enrichedFarmers = snapshot.docs.map((doc) => {
+        const farmer = doc.data();
+        const name = farmer.fullName || `${farmer.firstName || ""} ${farmer.lastName || ""}`.trim();
+        const vegetable = farmer.mainCrops?.crop1?.name || "N/A";
 
-      const enrichedFarmers = await Promise.all(
-        farmersData.map(async (farmer) => {
-          const vegetableQuery = query(
-            collection(db, "vegetables"),
-            where("farmerId", "==", farmer.id)
-          );
-          const vegetableSnapshot = await getDocs(vegetableQuery);
-          const mainCrops = vegetableSnapshot.docs.map((vegDoc) => ({ id: vegDoc.id, ...vegDoc.data() }));
+        let coordinates = farmer.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length < 2 || !coordinates.every(Number.isFinite)) {
+          coordinates = farmer.area && Array.isArray(farmer.area) && farmer.area.length >= 2
+            ? [farmer.area[0], farmer.area[1]]
+            : defaultCenter;
+        }
 
-          const name = farmer.fullName || `${farmer.firstName || ""} ${farmer.lastName || ""}`.trim();
-          let vegetable = "N/A";
-          if (mainCrops.length > 0) {
-            vegetable = mainCrops[0].name || "N/A";
-          }
-          let coordinates = farmer.coordinates;
-          if (!Array.isArray(coordinates) || coordinates.length < 2 || !coordinates.every(Number.isFinite)) {
-            coordinates = farmer.area && Array.isArray(farmer.area) && farmer.area.length >= 2
-              ? [farmer.area[0], farmer.area[1]]
-              : defaultCenter;
-          }
-
-          return {
-            id: farmer.id,
-            name,
-            vegetable,
-            coordinates,
-            hectares: farmer.hectares || 0,
-            season: farmer.season || "Default",
-            farmLocation: farmer.farmLocation || "N/A",
-            mainCrops,
-          };
-        })
-      );
+        return {
+          id: doc.id,
+          name,
+          vegetable,
+          coordinates,
+          hectares: farmer.hectares || 0,
+          season: farmer.season || "Default",
+          farmLocation: farmer.farmLocation || farmer.farmBarangay || "N/A",
+        };
+      });
 
       setFarmers(enrichedFarmers);
     }, (error) => console.error("Error fetching farmers:", error));
@@ -112,6 +98,25 @@ const Maps = () => {
       mapRef.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16, duration: 1.5 });
     }
   }, [isMapReady, mapRef, farmers]); // Removed userLocation dependency
+
+  // Handle body scroll locking when fullscreen
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+      // Force map to slightly resize to recalculate its bounds
+      setTimeout(() => {
+        if (mapRef) mapRef.invalidateSize();
+      }, 300);
+    } else {
+      document.body.style.overflow = 'auto';
+      setTimeout(() => {
+        if (mapRef) mapRef.invalidateSize();
+      }, 300);
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isFullscreen, mapRef]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -276,154 +281,244 @@ const Maps = () => {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header and Search Bar */}
         <header className="bg-white/90 backdrop-blur-md rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-50">
-          <h2 className="text-3xl font-bold text-green-800 flex items-center">
-            <FaMapMarkerAlt className="mr-3 text-green-600" />
-            Farm Map Explorer
-          </h2>
-
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <h2 className="text-3xl font-bold text-green-800 flex items-center">
+              <FaMapMarkerAlt className="mr-3 text-green-600" />
+              Farm Map Explorer
+            </h2>
+          </div>
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-800 font-semibold rounded-lg flex items-center transition-colors shadow-sm ml-auto"
+          >
+            {isFullscreen ? (
+              <><FaCompress className="mr-2" /> Exit Fullscreen</>
+            ) : (
+              <><FaExpand className="mr-2" /> View Fullscreen</>
+            )}
+          </button>
         </header>
 
         {/* Map Container */}
-        <div className="relative z-0 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden h-[600px] transition-all duration-300 hover:shadow-3xl">
-          <MapContainer
-            center={defaultCenter}
-            zoom={defaultZoom}
-            style={{ height: "100%", width: "100%" }}
-            whenCreated={(mapInstance) => {
-              setMapRef(mapInstance);
-              setIsMapReady(true);
-              if (pendingSearch) {
-                performSearch(pendingSearch);
-                setPendingSearch("");
-              }
-            }}
-            zoomControl={false}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
-            />
-            <ZoomControl position="topright" />
-            {/* LocateUserControl removed here */}
+        <div className={`transition-all duration-300 ${isFullscreen
+            ? 'fixed inset-0 z-[100] m-0 rounded-none bg-emerald-50 h-screen w-screen p-4 pb-8 shadow-none'
+            : 'relative z-0 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden h-[600px] hover:shadow-3xl'
+          }`}>
+          {isFullscreen && (
+            <button
+              onClick={() => setIsFullscreen(false)}
+              className="absolute top-6 right-6 z-[400] bg-white text-green-800 font-bold p-3 rounded-full shadow-2xl border-2 border-green-200 hover:bg-green-100 hover:scale-110 transition-all"
+              title="Exit Fullscreen"
+            >
+              <FaCompress className="text-xl" />
+            </button>
+          )}
+          <div className={`w-full h-full ${isFullscreen ? 'rounded-2xl overflow-hidden shadow-2xl border border-green-200/50' : ''}`}>
+            <MapContainer
+              center={defaultCenter}
+              zoom={defaultZoom}
+              style={{ height: "100%", width: "100%" }}
+              whenCreated={(mapInstance) => {
+                setMapRef(mapInstance);
+                setIsMapReady(true);
+                if (pendingSearch) {
+                  performSearch(pendingSearch);
+                  setPendingSearch("");
+                }
+              }}
+              zoomControl={false}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
+              />
+              <ZoomControl position="topright" />
+              {/* LocateUserControl removed here */}
 
-            <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="OpenStreetMap">
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
-                />
-              </LayersControl.BaseLayer>
-              <LayersControl.Overlay name="DA Office">
-                <LayerGroup>
-                  <Marker
-                    position={[daOffice.lat, daOffice.lng]}
-                    icon={createPinIcon("blue")}
-                    eventHandlers={{
-                      click: () => handleMarkerClick([daOffice.lat, daOffice.lng])
+              <LayersControl position="topright">
+                <LayersControl.BaseLayer checked name="OpenStreetMap">
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='<a href="https://www.openstreetmap.org/copyright"></a>'
+                  />
+                </LayersControl.BaseLayer>
+                <LayersControl.Overlay name="DA Office">
+                  <LayerGroup>
+                    <Marker
+                      position={[daOffice.lat, daOffice.lng]}
+                      icon={createPinIcon("blue")}
+                      eventHandlers={{
+                        click: () => handleMarkerClick([daOffice.lat, daOffice.lng])
+                      }}
+                    >
+                      <Popup>
+                        <div className="p-2">
+                          <h3 className="font-semibold text-green-800">DA Office</h3>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </LayerGroup>
+                </LayersControl.Overlay>
+                <LayersControl.Overlay checked name="Farmers">
+                  <MarkerClusterGroup
+                    showCoverageOnHover={false}
+                    spiderfyOnMaxZoom={true}
+                    zoomToBoundsOnClick={true}
+                    maxClusterRadius={50}
+                    iconCreateFunction={(cluster) => {
+                      const count = cluster.getChildCount();
+                      return L.divIcon({
+                        html: `<div style="background-color: rgba(51, 136, 255, 0.8); color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${count}</div>`,
+                        className: "custom-cluster-icon",
+                        iconSize: [40, 40],
+                      });
                     }}
                   >
-                    <Popup>
-                      <div className="p-2">
-                        <h3 className="font-semibold text-green-800">DA Office</h3>
-                      </div>
-                    </Popup>
+                    {farmers.map((farm) => {
+                      const position = getMarkerPosition(farm.coordinates);
+                      const iconColor = getIconColor(farm.vegetable);
+                      return (
+                        <Marker
+                          key={farm.id}
+                          position={position}
+                          icon={createPinIcon(iconColor)}
+                          eventHandlers={{
+                            click: () => handleMarkerClick(position)
+                          }}
+                        >
+                          <Popup>
+                            <div className="p-2">
+                              <h3 className="font-semibold text-green-800">{farm.name}</h3>
+                              <p className="text-sm text-gray-600"><strong>Crop:</strong> {farm.vegetable}</p>
+                              <p className="text-sm text-gray-600"><strong>Area:</strong> {farm.hectares} hectares</p>
+                              <p className="text-sm text-gray-600"><strong>Location:</strong> {farm.farmLocation}</p>
+                              <Link
+                                to={`/farmer/${farm.id}`}
+                                className="mt-2 inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                              >
+                                View Profile
+                              </Link>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      );
+                    })}
+                  </MarkerClusterGroup>
+                </LayersControl.Overlay>
+                {/* "My Location" layer removed here */}
+              </LayersControl>
+
+              <FeatureGroup ref={drawnItems}>
+                {mapMode === "draw" && (
+                  <EditControl
+                    position="topright"
+                    draw={{
+                      rectangle: true,
+                      polygon: true,
+                      polyline: false,
+                      circle: false,
+                      circlemarker: false,
+                      marker: true,
+                    }}
+                    edit={{
+                      edit: true,
+                      remove: true,
+                    }}
+                  />
+                )}
+              </FeatureGroup>
+
+              {geocodedLocation && Array.isArray(geocodedLocation) ? (
+                geocodedLocation.map((loc, index) => (
+                  <Marker
+                    key={`geocoded-${index}`}
+                    position={[loc.lat, loc.lng]}
+                    icon={createPinIcon("purple")}
+                    eventHandlers={{
+                      click: () => handleMarkerClick([loc.lat, loc.lng])
+                    }}
+                  >
+                    <Popup>{loc.display_name}</Popup>
                   </Marker>
-                </LayerGroup>
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Farmers">
-                <MarkerClusterGroup
-                  showCoverageOnHover={false}
-                  spiderfyOnMaxZoom={true}
-                  zoomToBoundsOnClick={true}
-                  maxClusterRadius={50}
-                  iconCreateFunction={(cluster) => {
-                    const count = cluster.getChildCount();
-                    return L.divIcon({
-                      html: `<div style="background-color: rgba(51, 136, 255, 0.8); color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${count}</div>`,
-                      className: "custom-cluster-icon",
-                      iconSize: [40, 40],
-                    });
-                  }}
-                >
-                  {farmers.map((farm) => {
-                    const position = getMarkerPosition(farm.coordinates);
-                    const iconColor = getIconColor(farm.vegetable);
-                    return (
-                      <Marker
-                        key={farm.id}
-                        position={position}
-                        icon={createPinIcon(iconColor)}
-                        eventHandlers={{
-                          click: () => handleMarkerClick(position)
-                        }}
-                      >
-                        <Popup>
-                          <div className="p-2">
-                            <h3 className="font-semibold text-green-800">{farm.name}</h3>
-                            <p className="text-sm text-gray-600"><strong>Crop:</strong> {farm.vegetable}</p>
-                            <p className="text-sm text-gray-600"><strong>Area:</strong> {farm.hectares} hectares</p>
-                            <p className="text-sm text-gray-600"><strong>Location:</strong> {farm.farmLocation}</p>
-                            <Link
-                              to={`/farmer/${farm.id}`}
-                              className="mt-2 inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                              View Profile
-                            </Link>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  })}
-                </MarkerClusterGroup>
-              </LayersControl.Overlay>
-              {/* "My Location" layer removed here */}
-            </LayersControl>
-
-            <FeatureGroup ref={drawnItems}>
-              {mapMode === "draw" && (
-                <EditControl
-                  position="topright"
-                  draw={{
-                    rectangle: true,
-                    polygon: true,
-                    polyline: false,
-                    circle: false,
-                    circlemarker: false,
-                    marker: true,
-                  }}
-                  edit={{
-                    edit: true,
-                    remove: true,
-                  }}
-                />
-              )}
-            </FeatureGroup>
-
-            {geocodedLocation && Array.isArray(geocodedLocation) ? (
-              geocodedLocation.map((loc, index) => (
+                ))
+              ) : geocodedLocation && (
                 <Marker
-                  key={`geocoded-${index}`}
-                  position={[loc.lat, loc.lng]}
+                  position={[geocodedLocation.lat, geocodedLocation.lng]}
                   icon={createPinIcon("purple")}
                   eventHandlers={{
-                    click: () => handleMarkerClick([loc.lat, loc.lng])
+                    click: () => handleMarkerClick([geocodedLocation.lat, geocodedLocation.lng])
                   }}
                 >
-                  <Popup>{loc.display_name}</Popup>
+                  <Popup>{geocodedLocation.display_name}</Popup>
                 </Marker>
-              ))
-            ) : geocodedLocation && (
-              <Marker
-                position={[geocodedLocation.lat, geocodedLocation.lng]}
-                icon={createPinIcon("purple")}
-                eventHandlers={{
-                  click: () => handleMarkerClick([geocodedLocation.lat, geocodedLocation.lng])
-                }}
-              >
-                <Popup>{geocodedLocation.display_name}</Popup>
-              </Marker>
-            )}
-          </MapContainer>
+              )}
+            </MapContainer>
+          </div>
+        </div>
+
+        {/* Statistics Panel */}
+        <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg p-6 flex flex-col md:flex-row gap-8">
+          <div className="flex-shrink-0 md:min-w-[180px] flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-green-100 pb-4 md:pb-0 md:pr-6">
+            <h3 className="text-sm font-semibold text-green-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <FaUsers className="text-green-600 text-lg" />
+              Total Farmers
+            </h3>
+            <p className="text-5xl font-extrabold text-green-600">{farmers.length}</p>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-green-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <FaMapMarkerAlt className="text-green-600 text-lg" />
+              Farmers per Location
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-green-200 [&::-webkit-scrollbar-track]:bg-transparent">
+              {Object.entries(farmers.reduce((acc, farmer) => {
+                const loc = farmer.farmLocation || "Unknown";
+                if (!acc[loc]) acc[loc] = [];
+                acc[loc].push(farmer);
+                return acc;
+              }, {}))
+                .sort((a, b) => b[1].length - a[1].length)
+                .map(([location, farmersInLocation]) => {
+                  const isExpanded = expandedLocation === location;
+                  return (
+                    <div key={location} className="flex flex-col gap-1">
+                      <button
+                        onClick={() => setExpandedLocation(isExpanded ? null : location)}
+                        className={`w-full text-left rounded-lg p-3 flex justify-between items-center border shadow-sm transition-all duration-200 group ${isExpanded
+                          ? 'bg-green-100 border-green-400 shadow-md ring-1 ring-green-400'
+                          : 'bg-green-50/70 hover:bg-green-100 border-green-200 hover:border-green-300 hover:shadow-md'
+                          }`}
+                      >
+                        <span className="text-sm font-semibold text-green-900 truncate mr-2 flex items-center gap-2">
+                          <span className={`transition-transform duration-200 text-green-600 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                          <span title={location}>{location}</span>
+                        </span>
+                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold shadow-sm transition-colors ${isExpanded ? 'bg-green-700 text-white' : 'bg-green-600 text-white group-hover:bg-green-700'
+                          }`}>
+                          {farmersInLocation.length}
+                        </span>
+                      </button>
+
+                      {/* Dropdown Farmers List */}
+                      {isExpanded && (
+                        <div className="flex flex-col gap-1 mt-1 pl-4 pr-1 animate-fade-in border-l-2 border-green-300 ml-2 py-1">
+                          {farmersInLocation.map(farmer => (
+                            <Link
+                              key={farmer.id}
+                              to={`/home/farmer/${farmer.id}`}
+                              className="text-xs bg-white hover:bg-green-50 text-gray-700 hover:text-green-800 py-2 px-3 rounded-md border border-gray-100 hover:border-green-200 shadow-sm transition-all flex justify-between items-center group/link"
+                            >
+                              <span className="truncate max-w-[120px] font-medium">{farmer.name}</span>
+                              <span className="text-[10px] text-gray-400 group-hover/link:text-green-600 font-semibold uppercase tracking-wider">Profile →</span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </div>
 
         {/* Only Map Insights at the bottom */}

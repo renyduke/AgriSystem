@@ -3,7 +3,7 @@ import axios from 'axios';
 import ReactApexChart from 'react-apexcharts';
 import Loading from '../../components/Loading';
 
-const API_BASE_URL = 'https://backend-3-fl3e.onrender.com';
+const API_BASE_URL = 'http://localhost:8000';
 
 const Dashboard = () => {
   // Core state
@@ -38,6 +38,8 @@ const Dashboard = () => {
   const [overviewYearFilter, setOverviewYearFilter] = useState('all');
   const [overviewCommodityFilter, setOverviewCommodityFilter] = useState('all');
   const [overviewDataView, setOverviewDataView] = useState('volume'); // 'volume' or 'price'
+  const [chartYearFilter, setChartYearFilter] = useState('all');
+  const [comparisonYearFilter, setComparisonYearFilter] = useState('all');
 
   // NEW: Training State
   const [isTraining, setIsTraining] = useState(false);
@@ -544,11 +546,15 @@ CONFIG = {
       const weekNumber = startWeek + index;
 
       const volItem = dashboardData.volume_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => item.commodity === chartCommodity &&
+          item.week === weekNumber &&
+          (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
       );
 
       const priceItem = dashboardData.price_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => item.commodity === chartCommodity &&
+          item.week === weekNumber &&
+          (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
       );
 
       volumeData.push(volItem ? volItem.volume : 0);
@@ -625,12 +631,16 @@ CONFIG = {
 
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
-            item => item.commodity === commodity && item.week === weekNumber
+            item => item.commodity === commodity &&
+              item.week === weekNumber &&
+              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.volume : 0;
         } else {
           const dataPoint = dashboardData.price_data.find(
-            item => item.commodity === commodity && item.week === weekNumber
+            item => item.commodity === commodity &&
+              item.week === weekNumber &&
+              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.average_price : 0;
         }
@@ -729,12 +739,16 @@ CONFIG = {
 
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
-            item => item.commodity === commodity && item.week === weekNumber
+            item => item.commodity === commodity &&
+              item.week === weekNumber &&
+              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.volume : null;
         } else {
           const dataPoint = dashboardData.price_data.find(
-            item => item.commodity === commodity && item.week === weekNumber
+            item => item.commodity === commodity &&
+              item.week === weekNumber &&
+              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.average_price : null;
         }
@@ -877,7 +891,7 @@ CONFIG = {
           }
         ],
         title: {
-          text: `📊 ${chartCommodity} - Volume vs Price Analysis`,
+          text: `📊 ${chartCommodity} (Per Kg.) - Volume vs Price Analysis`,
           align: 'left',
           style: { fontSize: '18px', fontWeight: 'bold' }
         },
@@ -948,7 +962,7 @@ CONFIG = {
           labels: { formatter: function (val) { return '₱' + val.toFixed(0); } }
         },
         title: {
-          text: `💰 ${chartCommodity} - Weekly Price Range Breakdown`,
+          text: `💰 ${chartCommodity} (Per Kg.) - Weekly Price Range Breakdown`,
           align: 'left',
           style: { fontSize: '18px', fontWeight: 'bold' }
         },
@@ -995,7 +1009,7 @@ CONFIG = {
           title: { text: forecastResult.data_type === 'price' ? 'Price (₱)' : 'Volume (Kg)' }
         },
         title: {
-          text: `🔮 ${mode.charAt(0).toUpperCase() + mode.slice(1)} Forecast: ${forecastResult.commodity}`,
+          text: `🔮 ${mode.charAt(0).toUpperCase() + mode.slice(1)} Forecast: ${forecastResult.commodity} (Per Kg.)`,
           align: 'left'
         },
         legend: { position: 'top', horizontalAlign: 'right' },
@@ -1028,7 +1042,11 @@ CONFIG = {
   // ============================================================================
 
   if (!dashboardData) {
-    return <Loading text="Loading dashboard data..." />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+        <Loading fullScreen={false} text="Loading dashboard data..." />
+      </div>
+    );
   }
 
   // Get available years for filter
@@ -1178,7 +1196,7 @@ CONFIG = {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                 >
                   {dashboardData.commodities.map(commodity => (
-                    <option key={commodity} value={commodity}>{commodity}</option>
+                    <option key={commodity} value={commodity}>{commodity} (Per Kg.)</option>
                   ))}
                 </select>
               </div>
@@ -1441,7 +1459,7 @@ CONFIG = {
                                   <div className="text-xs space-y-1 max-w-xs">
                                     {Object.entries(item.commodities).map(([commodity, volume]) => (
                                       <div key={commodity} className="flex justify-between">
-                                        <span className="text-gray-600">{commodity}:</span>
+                                        <span className="text-gray-600">{commodity} (Per Kg.):</span>
                                         <span className="font-medium text-gray-900">{volume.toFixed(2)} Kg</span>
                                       </div>
                                     ))}
@@ -1583,7 +1601,7 @@ CONFIG = {
                                   <div className="text-xs space-y-2 max-w-sm">
                                     {Object.entries(item.commodities).map(([commodity, prices]) => (
                                       <div key={commodity} className="border-l-2 border-green-200 pl-2">
-                                        <div className="font-medium text-gray-900 mb-1">{commodity}</div>
+                                        <div className="font-medium text-gray-900 mb-1">{commodity} (Per Kg.)</div>
                                         <div className="grid grid-cols-3 gap-2">
                                           <div>
                                             <span className="text-gray-500">LP:</span>
@@ -1807,7 +1825,7 @@ CONFIG = {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                     >
                       {dashboardData.commodities.map(commodity => (
-                        <option key={commodity} value={commodity}>{commodity}</option>
+                        <option key={commodity} value={commodity}>{commodity} (Per Kg.)</option>
                       ))}
                     </select>
                   </div>
@@ -1820,6 +1838,19 @@ CONFIG = {
                     >
                       {weekRanges.map(range => (
                         <option key={range.value} value={range.value}>{range.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
+                    <select
+                      value={chartYearFilter}
+                      onChange={(e) => setChartYearFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="all">All Years</option>
+                      {availableYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
                       ))}
                     </select>
                   </div>
@@ -1900,7 +1931,7 @@ CONFIG = {
                           }}
                           className="w-4 h-4 text-blue-600 rounded"
                         />
-                        <span className="text-sm font-medium text-gray-900">{commodity}</span>
+                        <span className="text-sm font-medium text-gray-900">{commodity} (Per Kg.)</span>
                       </label>
                     ))}
                   </div>
@@ -1915,6 +1946,20 @@ CONFIG = {
                       >
                         <option value="volume">📦 Volume (Kg)</option>
                         <option value="price">💰 Price (₱)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
+                      <select
+                        value={comparisonYearFilter}
+                        onChange={(e) => setComparisonYearFilter(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All Years</option>
+                        {availableYears.map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
                       </select>
                     </div>
 

@@ -422,19 +422,7 @@ const Home = () => {
               </div>
             </div>
 
-            {userRole === "admin" && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <FaClipboardList className="text-6xl text-red-600" />
-                </div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Pending Approvals</p>
-                <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.pendingRegistrations}</h3>
-                <div className="mt-4 flex items-center text-xs font-medium text-red-600 bg-red-50 w-fit px-2 py-1 rounded-full">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 mr-2 animate-pulse"></div>
-                  Action Required
-                </div>
-              </div>
-            )}
+
           </div>
         </section>
 
@@ -603,29 +591,26 @@ const Home = () => {
               </div>
             </div>
 
-            {/* Notifications - List Style */}
-            {userRole === "admin" && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
-                  {notifications.length > 0 && <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{notifications.length}</span>}
-                </div>
-
-                <div className="space-y-4">
-                  {notifications.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-4">No new notifications</p>
-                  ) : notifications.map((notif) => (
-                    <div key={notif.id} className="flex gap-3 items-start p-3 rounded-xl bg-gray-50 border border-gray-100">
-                      <div className="mt-1">{getNotificationIcon(notif.type)}</div>
-                      <div>
-                        <p className="text-sm text-gray-800 font-medium leading-tight">{notif.message}</p>
-                        <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {/* Activities - List Style */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Recent Activities</h3>
               </div>
-            )}
+
+              <div className="space-y-4">
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No recent activities</p>
+                ) : recentActivity.map((activity, index) => (
+                  <div key={`${activity.id}-${index}`} className="flex gap-3 items-start p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="mt-1"><FaCheckCircle className="text-green-500" /></div>
+                    <div>
+                      <p className="text-sm text-gray-800 font-medium leading-tight">{activity.action}</p>
+                      <p className="text-xs text-gray-500 mt-1">{activity.user} • {activity.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Top Crops - List Style */}
             {topCrops.length > 0 && (

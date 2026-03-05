@@ -135,7 +135,7 @@ const FarmerVegetablePage = () => {
           {/* Main Content */}
           <div className="space-y-6">
             {selectedVegetable ? (
-              <FarmersList vegetable={selectedVegetable} />
+              <FarmersList vegetable={selectedVegetable} navigate={navigate} />
             ) : (
               !loadingVegetables && (
                 <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
@@ -151,7 +151,7 @@ const FarmerVegetablePage = () => {
   );
 };
 
-const FarmersList = ({ vegetable }) => {
+const FarmersList = ({ vegetable, navigate }) => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -227,13 +227,13 @@ const FarmersList = ({ vegetable }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 gap-2">
         <h2 className="text-lg font-semibold text-slate-700">
           Showing {farmers.length} Result{farmers.length !== 1 && 's'}
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {farmers.map((farmer) => (
           <div
             key={farmer.id}
@@ -275,7 +275,10 @@ const FarmersList = ({ vegetable }) => {
             </div>
 
             <div className="mt-6">
-              <button className="w-full py-2.5 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-green-600 hover:text-white transition-all duration-200">
+              <button
+                onClick={() => navigate(`/home/farmer/${farmer.id}`)}
+                className="w-full py-2.5 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-green-600 hover:text-white transition-all duration-200 active:scale-95"
+              >
                 View Details
               </button>
             </div>

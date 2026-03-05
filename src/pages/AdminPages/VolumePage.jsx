@@ -3,6 +3,10 @@ import axios from 'axios';
 
 const API_BASE_URL = 'https://backend-3-fl3e.onrender.com';
 
+// Classify commodities into sections
+const RICE_CORN_KEYWORDS = ['rice', 'corn', 'palay'];
+const isRiceCorn = (commodity) => RICE_CORN_KEYWORDS.some(k => commodity.toLowerCase().includes(k));
+
 const VolumePage = () => {
   const [volumeData, setVolumeData] = useState([]);
   const [commodities, setCommodities] = useState([]);
@@ -12,7 +16,7 @@ const VolumePage = () => {
 
   // Signature States
   const [preparedBy, setPreparedBy] = useState('JACKLORD P. VILLARINO');
-  const [preparedTitle, setPreparedTitle] = useState('Farm Worker 1/Data Collector');
+  const [preparedTitle, setPreparedTitle] = useState('FW-1/Price Monitoring In-Charge');
   const [approvedBy, setApprovedBy] = useState('ANDREA C. CANOY');
   const [approvedTitle, setApprovedTitle] = useState('City Agriculturist');
 
@@ -37,219 +41,212 @@ const VolumePage = () => {
     }
   };
 
-  // Process data into table format
-  const processTableData = () => {
+  // Split commodities into two groups
+  const vegetableCommodities = commodities.filter(c => !isRiceCorn(c));
+  const riceCornCommodities = commodities.filter(c => isRiceCorn(c));
+
+  // Process data: group by month, sum all weeks' volumes per commodity
+  const processMonthlyData = () => {
     let filteredData = volumeData;
+    if (selectedYear !== 'all') filteredData = filteredData.filter(d => d.year === parseInt(selectedYear));
+    if (selectedMonth !== 'all') filteredData = filteredData.filter(d => d.month === parseInt(selectedMonth));
 
-    // Apply filters
-    if (selectedYear !== 'all') {
-      filteredData = filteredData.filter(d => d.year === parseInt(selectedYear));
-    }
-    if (selectedMonth !== 'all') {
-      filteredData = filteredData.filter(d => d.month === parseInt(selectedMonth));
-    }
-
-    // Group by month and week
-    const grouped = {};
-
+    const monthlyGroups = {};
     filteredData.forEach(item => {
-      const monthKey = `${item.year}-${item.month}`;
-      if (!grouped[monthKey]) {
-        grouped[monthKey] = {
-          month: item.month,
-          year: item.year,
-          weeks: {}
-        };
+      const monthKey = `${item.year}-${String(item.month).padStart(2, '0')}`;
+      if (!monthlyGroups[monthKey]) {
+        monthlyGroups[monthKey] = { year: item.year, month: item.month, commodityVolumes: {} };
       }
-
-      const weekKey = item.week;
-      if (!grouped[monthKey].weeks[weekKey]) {
-        grouped[monthKey].weeks[weekKey] = {};
+      if (!monthlyGroups[monthKey].commodityVolumes[item.commodity]) {
+        monthlyGroups[monthKey].commodityVolumes[item.commodity] = 0;
       }
-
-      grouped[monthKey].weeks[weekKey][item.commodity] = item.volume;
+      if (item.volume) monthlyGroups[monthKey].commodityVolumes[item.commodity] += item.volume;
     });
-
-    return grouped;
+    return monthlyGroups;
   };
 
-  // Calculate totals for each commodity
-  const calculateCommodityTotals = (tableData) => {
-    const totals = {};
-    commodities.forEach(commodity => {
-      totals[commodity] = 0;
-    });
-
-    Object.values(tableData).forEach(monthData => {
-      Object.values(monthData.weeks).forEach(weekData => {
-        commodities.forEach(commodity => {
-          if (weekData[commodity]) {
-            totals[commodity] += weekData[commodity];
-          }
-        });
-      });
-    });
-
-    return totals;
+  const getPeriodLabel = () => {
+    const parts = [];
+    if (selectedMonth !== 'all') parts.push(monthNames[parseInt(selectedMonth) - 1]);
+    if (selectedYear !== 'all') parts.push(selectedYear);
+    return parts.length > 0 ? parts.join(' ') : 'All Periods';
   };
 
-  // Calculate week totals
-  const calculateWeekTotal = (weekData) => {
-    return commodities.reduce((sum, commodity) => {
-      return sum + (weekData[commodity] || 0);
-    }, 0);
-  };
-
-  // Download as CSV
   const downloadCSV = () => {
-    const tableData = processTableData();
-    const totals = calculateCommodityTotals(tableData);
-
-    let csv = 'Month/Date,' + commodities.join(',') + ',Total\n';
-
-    Object.entries(tableData)
-      .sort(([keyA], [keyB]) => {
-        const [yearA, monthA] = keyA.split('-').map(Number);
-        const [yearB, monthB] = keyB.split('-').map(Number);
-        if (yearA !== yearB) return yearA - yearB;
-        return monthA - monthB;
-      })
-      .forEach(([_, monthData]) => {
-        const monthName = monthNames[monthData.month - 1];
-        csv += `${monthName}\n`;
-
-        const weekNumbers = Object.keys(monthData.weeks).sort((a, b) => {
-          const numA = parseInt(a.replace(/\D/g, '')) || 0;
-          const numB = parseInt(b.replace(/\D/g, '')) || 0;
-          return numA - numB;
-        });
-
-        weekNumbers.forEach(weekNum => {
-          const weekData = monthData.weeks[weekNum];
-          const displayWeek = weekNum.toLowerCase().includes('week') ? weekNum : `Week ${weekNum}`;
-          const row = [displayWeek];
-
-          commodities.forEach(commodity => {
-            row.push(weekData[commodity] ? weekData[commodity].toFixed(2) : '');
-          });
-
-          row.push(calculateWeekTotal(weekData).toFixed(2));
-          csv += row.join(',') + '\n';
-        });
+    const monthlyData = processMonthlyData();
+    let csv = '';
+    Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b)).forEach(([_, data]) => {
+      const monthLabel = `${monthNames[data.month - 1]} ${data.year}`;
+      csv += `\n${monthLabel}\n`;
+      csv += '\n1. HIGH VALUE CROP COMMODITY VOLUME\n';
+      csv += 'No.,Commodity,Volume (Kg),Remarks\n';
+      let vegTotal = 0;
+      vegetableCommodities.forEach((c, i) => {
+        const vol = data.commodityVolumes[c] || 0;
+        csv += `${i + 1},"${c} (Per Kg.)",${vol > 0 ? vol.toFixed(2) + ' kg' : ''},\n`;
+        vegTotal += vol;
       });
+      csv += `,,${vegTotal.toFixed(2)} kg,Subtotal\n`;
 
-    // Add totals row
-    csv += 'Total,';
-    csv += commodities.map(commodity => totals[commodity].toFixed(2)).join(',');
-    const grandTotal = Object.values(totals).reduce((sum, val) => sum + val, 0);
-    csv += ',' + grandTotal.toFixed(2) + '\n';
-
+      if (riceCornCommodities.length > 0) {
+        csv += '\n2. RICE & CORN COMMODITY VOLUME\n';
+        csv += 'No.,Commodity,Volume (Kg),Remarks\n';
+        let rcTotal = 0;
+        riceCornCommodities.forEach((c, i) => {
+          const vol = data.commodityVolumes[c] || 0;
+          csv += `${i + 1},"${c} (Per Kg.)",${vol > 0 ? vol.toFixed(2) + ' kg' : ''},\n`;
+          rcTotal += vol;
+        });
+        csv += `,,${rcTotal.toFixed(2)} kg,Subtotal\n`;
+      }
+    });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `volume_report_${Date.now()}.csv`;
+    a.download = `volume_monitoring_report_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Print function
+  // Helper to build section rows for print
+  const buildSectionRowsHtml = (commodityList, data) => {
+    let html = '';
+    let sectionTotal = 0;
+    commodityList.forEach((commodity, idx) => {
+      const volume = data.commodityVolumes[commodity] || 0;
+      sectionTotal += volume;
+      html += `
+        <tr>
+          <td>${idx + 1}</td>
+          <td style="text-align: left; padding-left: 8px;">${commodity} (Per Kg.)</td>
+          <td>${volume > 0 ? volume.toFixed(2) + ' kg' : ''}</td>
+          <td></td>
+        </tr>
+      `;
+    });
+    html += `
+      <tr style="font-weight: bold; background-color: #f0f0f0;">
+        <td colspan="2" style="text-align: right; padding-right: 8px;">Subtotal</td>
+        <td>${sectionTotal > 0 ? sectionTotal.toFixed(2) + ' kg' : ''}</td>
+        <td></td>
+      </tr>
+    `;
+    return html;
+  };
+
+  // Print function - Government Form Style (one page per month)
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
-    const printContent = printRef.current.innerHTML;
+    const sortedMonthEntries = Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b));
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Volume Report</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 20px;
-              font-size: 10px;
-            }
-            table { 
-              border-collapse: collapse; 
-              width: 100%; 
-              margin-top: 20px;
-            }
-            th, td { 
-              border: 1px solid #000; 
-              padding: 6px 8px; 
-              text-align: center;
-            }
-            th { 
-              background-color: #f0f0f0; 
-              font-weight: bold;
-            }
-            .month-header {
-              background-color: #fff3cd;
-              font-weight: bold;
-              text-align: left;
-            }
-            .total-row {
-              background-color: #e9ecef;
-              font-weight: bold;
-            }
-            .signature-section {
-              margin-top: 40px;
-              display: flex;
-              justify-content: space-between;
-            }
-            .signature-box {
-              text-align: center;
-              width: 45%;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 20px;
-            }
-            .header h2 {
-              margin: 5px 0;
-            }
-            @media print {
-              body { margin: 0.5cm; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <img src="/logo.png" style="width: 60px; height: 60px; margin-bottom: 10px;" />
-            <h2>Agricultural Volume Report</h2>
-            <p>Generated on ${new Date().toLocaleDateString()}</p>
+    let pagesHtml = '';
+    sortedMonthEntries.forEach(([monthKey, data], index) => {
+      const monthLabel = `${monthNames[data.month - 1]} ${data.year}`;
+      const isLastPage = index === sortedMonthEntries.length - 1;
+
+      const vegRows = buildSectionRowsHtml(vegetableCommodities, data);
+      const rcRows = buildSectionRowsHtml(riceCornCommodities, data);
+
+      pagesHtml += `
+        <div class="page" ${!isLastPage ? 'style="page-break-after: always;"' : ''}>
+          <div class="gov-header">
+            <img src="/logo.png" alt="Logo" class="gov-logo" />
+            <p>Republic of the Philippines</p>
+            <p><strong>OFFICE OF THE CITY AGRICULTURIST</strong></p>
+            <p>Canlaon City, Negros Oriental</p>
+            <p class="title">VOLUME MONITORING OF AGRICULTURAL CROPS COMMODITY PRODUCTS</p>
+            <p class="subtitle">For the Period (Month/Date/Year): ${monthLabel}</p>
           </div>
-          ${printContent}
+
+          <p class="section-label">1. HIGH VALUE CROP COMMODITY VOLUME MONITORING</p>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px;">No.</th>
+                <th>Commodity</th>
+                <th style="width: 100px;">Volume (Kg)</th>
+                <th style="width: 100px;">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${vegRows}
+            </tbody>
+          </table>
+
+          ${riceCornCommodities.length > 0 ? `
+            <p class="section-label" style="margin-top: 15px;">2. RICE & CORN COMMODITY VOLUME MONITORING</p>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px;">No.</th>
+                  <th>Commodity</th>
+                  <th style="width: 100px;">Volume (Kg)</th>
+                  <th style="width: 100px;">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rcRows}
+              </tbody>
+            </table>
+          ` : ''}
+
           <div class="signature-section">
             <div class="signature-box">
-              <p>Prepared & Submitted By:</p>
-              <div style="margin-top: 40px; border-top: 2px solid #000; padding-top: 5px;">
+              <p class="signature-label">Prepared/Submitted by:</p>
+              <div class="signature-line">
                 <p><strong>${preparedBy}</strong></p>
                 <p>${preparedTitle}</p>
               </div>
             </div>
-            
             <div class="signature-box">
-              <p>Approved By:</p>
-              <div style="margin-top: 40px; border-top: 2px solid #000; padding-top: 5px;">
+              <p class="signature-label">Submitted to:</p>
+              <div class="signature-line">
                 <p><strong>${approvedBy}</strong></p>
                 <p>${approvedTitle}</p>
               </div>
             </div>
           </div>
+        </div>
+      `;
+    });
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Volume Monitoring Report</title>
+          <style>
+            @page { size: portrait; margin: 1cm; }
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 10px; color: #000; }
+            .page { padding: 1cm; }
+            .gov-header { text-align: center; margin-bottom: 10px; }
+            .gov-logo { width: 60px; height: 60px; margin: 0 auto 5px auto; display: block; }
+            .gov-header p { margin: 2px 0; font-size: 10px; }
+            .gov-header .title { font-weight: bold; font-size: 11px; margin-top: 8px; text-align: center; }
+            .gov-header .subtitle { font-size: 10px; text-align: center; }
+            .section-label { font-weight: bold; font-size: 10px; margin: 8px 0 3px 0; text-align: center; }
+            table { border-collapse: collapse; width: 100%; margin-top: 3px; font-size: 9px; }
+            th, td { border: 1px solid #000; padding: 3px 5px; text-align: center; }
+            th { font-weight: bold; font-size: 9px; }
+            .signature-section { margin-top: 20px; display: flex; justify-content: space-between; }
+            .signature-box { text-align: center; width: 45%; }
+            .signature-line { display: inline-block; border-top: 1px solid #000; padding-top: 3px; margin-top: 30px; }
+            .signature-line p { margin: 1px 0; font-size: 9px; }
+            .signature-label { font-size: 9px; margin-bottom: 0; }
+            @media print { .page { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
         </body>
       </html>
     `);
 
     printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
   };
 
-  const tableData = processTableData();
-  const totals = calculateCommodityTotals(tableData);
+  const monthlyData = processMonthlyData();
   const availableYears = [...new Set(volumeData.map(d => d.year))].sort((a, b) => b - a);
 
   if (loading) {
@@ -263,15 +260,57 @@ const VolumePage = () => {
     );
   }
 
+  const sortedMonths = Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b));
+
+  // Render a commodity volume table section
+  const renderCommodityTable = (commodityList, data) => {
+    const sectionTotal = commodityList.reduce((sum, c) => sum + (data.commodityVolumes[c] || 0), 0);
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-300">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-3 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300 w-12">No.</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300">Commodity</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300 w-36">Volume (Kg)</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300 w-36">Remarks</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-300">
+            {commodityList.map((commodity, idx) => {
+              const volume = data.commodityVolumes[commodity] || 0;
+              return (
+                <tr key={commodity} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 text-center text-sm text-gray-900 border border-gray-300">{idx + 1}</td>
+                  <td className="px-4 py-2 text-left text-sm text-gray-900 border border-gray-300">{commodity} (Per Kg.)</td>
+                  <td className="px-4 py-2 text-center text-sm text-gray-900 border border-gray-300">{volume > 0 ? `${volume.toFixed(2)} kg` : ''}</td>
+                  <td className="px-4 py-2 text-center text-sm text-gray-500 border border-gray-300"></td>
+                </tr>
+              );
+            })}
+            <tr className="bg-gray-200 font-bold">
+              <td colSpan={2} className="px-4 py-3 text-right text-sm font-bold text-gray-900 border border-gray-300">Subtotal</td>
+              <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 border border-gray-300">{sectionTotal > 0 ? `${sectionTotal.toFixed(2)} kg` : ''}</td>
+              <td className="px-4 py-3 border border-gray-300"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
       {/* Header */}
       <header className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">📦 Volume Data Report</h1>
-              <p className="text-sm text-gray-600 mt-1">Detailed commodity volume analysis</p>
+            <div className="flex items-center gap-4">
+              <img src="/logo.png" alt="Logo" className="w-14 h-14 object-contain" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">📦 Volume Monitoring Report</h1>
+                <p className="text-sm text-gray-600 mt-1">Agricultural Crops Commodity Volume Monitoring</p>
+              </div>
             </div>
           </div>
         </div>
@@ -281,239 +320,134 @@ const VolumePage = () => {
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Controls */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-              >
+              <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
                 <option value="all">All Years</option>
-                {availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
+                {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
               </select>
             </div>
-
-            <div className="flex-1 min-w-[200px]">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Month</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-              >
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
                 <option value="all">All Months</option>
-                {monthNames.map((month, idx) => (
-                  <option key={idx} value={idx + 1}>{month}</option>
-                ))}
+                {monthNames.map((month, idx) => <option key={idx} value={idx + 1}>{month}</option>)}
               </select>
             </div>
-
             <div className="flex gap-2 items-end">
-              <button
-                onClick={downloadCSV}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <span>📥</span>
-                <span>Download CSV</span>
+              <button onClick={downloadCSV}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                <span>📥</span><span>CSV</span>
               </button>
-
-              <button
-                onClick={handlePrint}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <span>🖨️</span>
-                <span>Print</span>
+              <button onClick={handlePrint}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                <span>🖨️</span><span>Print</span>
               </button>
+            </div>
+          </div>
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📋</span>
+              <div>
+                <p className="font-semibold text-blue-700">Period: {getPeriodLabel()}</p>
+                <p className="text-sm text-gray-600 mt-1">Each month aggregates all weeks (1-4) into total volume per commodity</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Signature Settings - NEW Section */}
+        {/* Signature Settings */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <span>✍️</span> Signature Settings
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <p className="text-sm font-medium text-gray-700">Prepared & Submitted By</p>
+              <p className="text-sm font-medium text-gray-700">Prepared/Submitted by</p>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={preparedBy}
-                  onChange={(e) => setPreparedBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter name"
-                />
+                <input type="text" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter name" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Title/Position</label>
-                <input
-                  type="text"
-                  value={preparedTitle}
-                  onChange={(e) => setPreparedTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter title"
-                />
+                <input type="text" value={preparedTitle} onChange={(e) => setPreparedTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter title" />
               </div>
             </div>
-
             <div className="space-y-4">
-              <p className="text-sm font-medium text-gray-700">Approved By</p>
+              <p className="text-sm font-medium text-gray-700">Submitted to</p>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={approvedBy}
-                  onChange={(e) => setApprovedBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter name"
-                />
+                <input type="text" value={approvedBy} onChange={(e) => setApprovedBy(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter name" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Title/Position</label>
-                <input
-                  type="text"
-                  value={approvedTitle}
-                  onChange={(e) => setApprovedTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter title"
-                />
+                <input type="text" value={approvedTitle} onChange={(e) => setApprovedTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter title" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div ref={printRef} className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300">
-                    Month/Date
-                  </th>
-                  {commodities.map(commodity => (
-                    <th
-                      key={commodity}
-                      className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300"
-                    >
-                      {commodity}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase border border-gray-300">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-300">
-                {Object.entries(tableData).length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={commodities.length + 2}
-                      className="px-4 py-8 text-center text-gray-500"
-                    >
-                      No data available for selected filters
-                    </td>
-                  </tr>
-                ) : (
-                  Object.entries(tableData)
-                    .sort(([keyA], [keyB]) => {
-                      const [yearA, monthA] = keyA.split('-').map(Number);
-                      const [yearB, monthB] = keyB.split('-').map(Number);
-                      if (yearA !== yearB) return yearA - yearB;
-                      return monthA - monthB;
-                    })
-                    .map(([monthKey, monthData]) => {
-                      const weekNumbers = Object.keys(monthData.weeks).sort((a, b) => {
-                        const numA = parseInt(a.replace(/\D/g, '')) || 0;
-                        const numB = parseInt(b.replace(/\D/g, '')) || 0;
-                        return numA - numB;
-                      });
+        {/* Tables */}
+        <div ref={printRef}>
+          {sortedMonths.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">No data available for selected filters</div>
+          ) : (
+            sortedMonths.map(([monthKey, data]) => {
+              const monthLabel = `${monthNames[data.month - 1]} ${data.year}`;
+              return (
+                <div key={monthKey} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+                  <div className="bg-yellow-50 border-b border-yellow-300 px-6 py-3">
+                    <h3 className="text-lg font-bold text-gray-900">📅 {monthLabel}</h3>
+                    <p className="text-xs text-gray-500">Aggregated from Weeks 1-4</p>
+                  </div>
 
-                      return (
-                        <React.Fragment key={monthKey}>
-                          {/* Month Header Row */}
-                          <tr className="bg-yellow-50">
-                            <td
-                              colSpan={commodities.length + 2}
-                              className="px-4 py-2 text-left font-bold text-gray-900 border border-gray-300"
-                            >
-                              {monthNames[monthData.month - 1]}
-                            </td>
-                          </tr>
+                  <div className="p-4">
+                    {/* Section 1: Vegetables / High Value Crops */}
+                    {vegetableCommodities.length > 0 && (
+                      <>
+                        <h4 className="text-sm font-bold text-gray-800 mb-2 bg-green-50 px-3 py-2 rounded border-l-4 border-green-500">
+                          1. HIGH VALUE CROP COMMODITY VOLUME MONITORING
+                        </h4>
+                        {renderCommodityTable(vegetableCommodities, data)}
+                      </>
+                    )}
 
-                          {/* Week Data Rows */}
-                          {weekNumbers.map(weekNum => {
-                            const weekData = monthData.weeks[weekNum];
-                            const weekTotal = calculateWeekTotal(weekData);
-                            const displayWeek = weekNum.toLowerCase().includes('week') ? weekNum : `Week ${weekNum}`;
-
-                            return (
-                              <tr key={`${monthKey}-${weekNum}`} className="hover:bg-gray-50">
-                                <td className="px-4 py-2 text-center text-sm text-gray-900 border border-gray-300">
-                                  {displayWeek}
-                                </td>
-                                {commodities.map(commodity => (
-                                  <td
-                                    key={commodity}
-                                    className="px-4 py-2 text-center text-sm text-gray-900 border border-gray-300"
-                                    style={{ backgroundColor: weekData[commodity] ? '#ffff99' : 'white' }}
-                                  >
-                                    {weekData[commodity] ? weekData[commodity].toFixed(2) : ''}
-                                  </td>
-                                ))}
-                                <td className="px-4 py-2 text-center text-sm font-semibold text-gray-900 border border-gray-300 bg-gray-100">
-                                  {weekTotal > 0 ? weekTotal.toFixed(2) : ''}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    })
-                )}
-
-                {/* Totals Row */}
-                {Object.entries(tableData).length > 0 && (
-                  <tr className="bg-gray-200">
-                    <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 border border-gray-300">
-                      Total
-                    </td>
-                    {commodities.map(commodity => (
-                      <td
-                        key={commodity}
-                        className="px-4 py-3 text-center text-sm font-bold text-gray-900 border border-gray-300"
-                      >
-                        {totals[commodity] > 0 ? totals[commodity].toFixed(2) : ''}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 border border-gray-300">
-                      {Object.values(totals).reduce((sum, val) => sum + val, 0).toFixed(2)}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            {/* Signature Section */}
-            <div className="signature-section p-8">
-              <div className="signature-box">
-                <p className="text-sm text-gray-600 mb-1">Prepared & Submitted By:</p>
-                <div className="mt-8 pt-4 border-t-2 border-gray-800">
-                  <p className="font-bold uppercase">{preparedBy}</p>
-                  <p className="text-sm text-gray-600">{preparedTitle}</p>
+                    {/* Section 2: Rice & Corn */}
+                    {riceCornCommodities.length > 0 && (
+                      <>
+                        <h4 className="text-sm font-bold text-gray-800 mt-5 mb-2 bg-amber-50 px-3 py-2 rounded border-l-4 border-amber-500">
+                          2. RICE & CORN COMMODITY VOLUME MONITORING
+                        </h4>
+                        {renderCommodityTable(riceCornCommodities, data)}
+                      </>
+                    )}
+                  </div>
                 </div>
+              );
+            })
+          )}
+
+          {/* Signature Section */}
+          <div className="signature-section p-8">
+            <div className="signature-box">
+              <p className="text-sm text-gray-600 mb-1">Prepared/Submitted by:</p>
+              <div className="mt-8 pt-2 inline-block border-t-2 border-gray-800">
+                <p className="font-bold uppercase">{preparedBy}</p>
+                <p className="text-sm text-gray-600">{preparedTitle}</p>
               </div>
-
-              <div className="signature-box">
-                <p className="text-sm text-gray-600 mb-1">Approved By:</p>
-                <div className="mt-8 pt-4 border-t-2 border-gray-800">
-                  <p className="font-bold uppercase">{approvedBy}</p>
-                  <p className="text-sm text-gray-600">{approvedTitle}</p>
-                </div>
+            </div>
+            <div className="signature-box">
+              <p className="text-sm text-gray-600 mb-1">Submitted to:</p>
+              <div className="mt-8 pt-2 inline-block border-t-2 border-gray-800">
+                <p className="font-bold uppercase">{approvedBy}</p>
+                <p className="text-sm text-gray-600">{approvedTitle}</p>
               </div>
             </div>
           </div>
@@ -527,16 +461,12 @@ const VolumePage = () => {
           margin-top: 40px;
           gap: 40px;
         }
-        
         .signature-box {
           text-align: center;
           flex: 1;
         }
-        
         @media print {
-          .signature-section {
-            page-break-inside: avoid;
-          }
+          .signature-section { page-break-inside: avoid; }
         }
       `}</style>
     </div>

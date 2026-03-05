@@ -31,13 +31,13 @@ const Settings = () => {
     return savedData
       ? JSON.parse(savedData)
       : {
-          username: "currentuser",
-          email: "user@example.com",
-          currency: "USD",
-          language: "English",
-          notifications: true,
-          newVegetable: "",
-        };
+        username: "currentuser",
+        email: "user@example.com",
+        currency: "USD",
+        language: "English",
+        notifications: true,
+        newVegetable: "",
+      };
   });
 
   const [vegetables, setVegetables] = useState(() => {
@@ -260,14 +260,12 @@ const Settings = () => {
                     aria-label="Toggle Night Mode"
                   />
                   <div
-                    className={`w-12 h-6 rounded-full transition-colors duration-300 ${
-                      isDark ? 'bg-gray-700' : 'bg-gray-200'
-                    }`}
+                    className={`w-12 h-6 rounded-full transition-colors duration-300 ${isDark ? 'bg-gray-700' : 'bg-gray-200'
+                      }`}
                   >
                     <div
-                      className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-300 ${
-                        isDark ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-300 ${isDark ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     ></div>
                   </div>
                   <FaMoon className={`ml-2 text-sm ${isDark ? 'text-yellow-500' : 'text-gray-400'}`} />

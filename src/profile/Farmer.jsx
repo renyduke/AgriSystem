@@ -439,8 +439,8 @@ const Farmer = () => {
                 <button
                   onClick={() => setViewMode("card")}
                   className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "card"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
                   <FaTh />
@@ -449,8 +449,8 @@ const Farmer = () => {
                 <button
                   onClick={() => setViewMode("list")}
                   className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "list"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
                   <FaList />
@@ -730,11 +730,6 @@ const Farmer = () => {
                                     <FaTimes className="mr-1" />
                                     Remove
                                   </button>
-                                  {crop.name && (
-                                    <span className="text-xs text-gray-500">
-                                      {calculateDuration(vegetables.find(v => v.name === crop.name)?.harvestAfter || 60)}
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             );
@@ -796,13 +791,7 @@ const Farmer = () => {
                               <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                                 <div>
                                   <p className="text-sm font-medium text-gray-900">{crop.name}</p>
-                                  <p className="text-xs text-gray-500">
-                                    {crop.plantingDate} → {crop.harvestDate}
-                                  </p>
                                 </div>
-                                <span className="text-xs text-gray-500">
-                                  {calculateDuration(vegetables.find(v => v.name === crop.name)?.harvestAfter || 60)}
-                                </span>
                               </div>
                             ))
                           ) : (

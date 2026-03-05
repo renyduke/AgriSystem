@@ -2,6 +2,9 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LogOut } from "lucide-react";
+import { auth, db } from "../../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 const Sidebar = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -11,7 +14,33 @@ const Sidebar = () => {
   const [tooltip, setTooltip] = useState(null);
   const [showLogoutPopup, setShowLogoutPopup] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [userName, setUserName] = useState("Loading...");
   const navigate = useNavigate();
+
+  // Load user data on mount
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const fullName = userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
+            setUserName(fullName || "Admin");
+          } else {
+            setUserName("Admin");
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setUserName("Admin");
+        }
+      } else {
+        setUserName("Guest");
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Load persisted collapsed state
   useEffect(() => {
@@ -69,24 +98,25 @@ const Sidebar = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <div
-              className={`bg-white/10 rounded-md p-1 flex-shrink-0 ${collapsed ? "w-8 h-8" : "w-10 h-10"
+              className={`flex-shrink-0 ${collapsed ? "w-8 h-8" : "w-12 h-12"
                 } flex items-center justify-center`}
             >
               <img
                 src="/logo.png"
                 alt="Logo"
-                className={`${collapsed ? "w-6 h-6" : "w-8 h-8"} object-cover`}
+                className={`${collapsed ? "w-8 h-8" : "w-12 h-12"} object-contain`}
               />
             </div>
 
-            <motion.span
+            <motion.div
               initial={false}
               animate={{ opacity: collapsed ? 0 : 1 }}
-              className="ml-2 font-semibold text-sm overflow-hidden whitespace-nowrap"
+              className="ml-2 overflow-hidden whitespace-nowrap flex flex-col justify-center"
               style={{ width: collapsed ? 0 : "auto" }}
             >
-              Admin
-            </motion.span>
+              <span className="font-bold text-lg tracking-wide">AgriMap Admin</span>
+              <span className="text-xs text-green-200 mt-0.5 opacity-90">Logged as: {userName}</span>
+            </motion.div>
           </div>
         </div>
 
@@ -355,33 +385,6 @@ const Sidebar = () => {
               </NavLink>
             </motion.li>
 
-            {/* Farmer Banking */}
-            <motion.li variants={itemVariants} initial="initial" whileHover="hover">
-              <NavLink
-                to="/home/farmer-banking"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
-                }
-                onMouseEnter={() => setTooltip(collapsed ? "farmer-banking" : null)}
-                onMouseLeave={() => setTooltip(null)}
-              >
-                {({ isActive }) => (
-                  <motion.div
-                    variants={itemVariants}
-                    animate={isActive ? "active" : "initial"}
-                    className="flex items-center gap-2 w-full"
-                  >
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>
-                      Farmer Banking
-                    </span>
-                  </motion.div>
-                )}
-              </NavLink>
-            </motion.li>
-
             {/* User Management */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
               <NavLink
@@ -461,8 +464,8 @@ const Sidebar = () => {
                     animate="visible"
                     exit="hidden"
                   >
-                    {/* Main Reports */}
-                    <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+
+                    {/* <motion.li variants={itemVariants} initial="initial" whileHover="hover">
                       <NavLink
                         to="/home/reports"
                         className={({ isActive }) =>
@@ -482,7 +485,7 @@ const Sidebar = () => {
                           </motion.div>
                         )}
                       </NavLink>
-                    </motion.li>
+                    </motion.li> */}
 
                     {/* Price Report */}
                     <motion.li variants={itemVariants} initial="initial" whileHover="hover">
