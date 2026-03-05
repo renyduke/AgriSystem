@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-
-const API_BASE_URL = 'https://backend-3-fl3e.onrender.com';
+import API_BASE_URL from '../../config';
 
 // Classify commodities into sections
 const RICE_CORN_KEYWORDS = ['rice', 'corn', 'palay'];

@@ -8,8 +8,8 @@ import {
   FaArrowUp, FaArrowDown, FaExclamationTriangle, FaCheckCircle,
   FaInfoCircle, FaTimes, FaChevronRight
 } from 'react-icons/fa';
+import API_BASE_URL from '../../config';
 
-const API_BASE_URL = 'https://backend-3-fl3e.onrender.com';
 
 const FarmerBankingPage = () => {
   const [farmers, setFarmers] = useState([]);

@@ -15,14 +15,26 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
 
-const redIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const createPinIcon = (color) => {
+  return new L.Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+  });
+};
+
+const getIconColor = (crop) => {
+  if (!crop) return "grey";
+  switch (crop.trim()) {
+    case "Tomato": return "red";
+    case "Corn": return "yellow";
+    case "Rice": return "green";
+    default: return "grey";
+  }
+};
 
 const center = [10.3903, 123.2224];
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
@@ -350,7 +362,11 @@ const AgriDashboard = () => {
                 {farmersData
                   .filter((farm) => farm.coordinates && farm.coordinates.length === 2)
                   .map((farm) => (
-                    <Marker key={farm.id} position={farm.coordinates} icon={redIcon}>
+                    <Marker
+                      key={farm.id}
+                      position={farm.coordinates}
+                      icon={createPinIcon(getIconColor(farm.vegetable))}
+                    >
                       <Popup>
                         <div className="p-1">
                           <strong className="block text-sm text-gray-900">{farm.name}</strong>

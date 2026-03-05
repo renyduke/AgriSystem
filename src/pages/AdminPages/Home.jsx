@@ -9,6 +9,7 @@ import L from "leaflet";
 import { db } from "../../config/firebaseConfig";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import { FaMapMarkerAlt, FaLeaf, FaSearch, FaUsers, FaMap, FaTractor, FaSeedling, FaChartLine, FaFileAlt, FaArrowRight, FaBell, FaUserPlus, FaClipboardList, FaExclamationTriangle, FaCheckCircle, FaClock, FaUserShield, FaExpand, FaCog, FaChartBar, FaDatabase } from "react-icons/fa";
+import API_BASE_URL from "../../config";
 
 // DA Office coordinates
 const daOffice = { lat: 10.378622, lng: 123.230062 };
@@ -191,7 +192,7 @@ const Home = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch('https://backend-3-fl3e.onrender.com/api/dashboard');
+        const response = await fetch(`${API_BASE_URL}/api/dashboard`);
         const data = await response.json();
         setDashboardData(data);
       } catch (error) {

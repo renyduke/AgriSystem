@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ReactApexChart from 'react-apexcharts';
 import Loading from '../../components/Loading';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../config';
 
 const Dashboard = () => {
   // Core state
@@ -106,9 +105,9 @@ const Dashboard = () => {
     if (forecastMode === 'weekly') {
       setPeriodsAhead(4);
     } else if (forecastMode === 'monthly') {
-      setPeriodsAhead(12);
+      setPeriodsAhead(4); // Default to 4 weeks
     } else if (forecastMode === 'yearly') {
-      setPeriodsAhead(3);
+      setPeriodsAhead(12); // Default to max 12 weeks
     }
   }, [forecastMode]);
 
@@ -268,14 +267,8 @@ const Dashboard = () => {
       const requestBody = {
         commodity: selectedCommodity,
         data_type: selectedDataType,
-        forecast_mode: forecastMode
+        weeks_ahead: periodsAhead
       };
-
-      if (forecastMode === 'weekly') {
-        requestBody.weeks_ahead = periodsAhead;
-      } else {
-        requestBody.periods_ahead = periodsAhead;
-      }
 
       const response = await axios.post(`${API_BASE_URL}/api/forecast`, requestBody);
       setForecastResult(response.data);
@@ -1228,14 +1221,14 @@ CONFIG = {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {forecastMode === 'weekly' ? 'Weeks' : forecastMode === 'monthly' ? 'Months' : 'Years'} Ahead
+                  Forecast Duration (Weeks Ahead)
                 </label>
                 <input
                   type="number"
                   value={periodsAhead}
                   onChange={(e) => setPeriodsAhead(parseInt(e.target.value))}
                   min="1"
-                  max={forecastMode === 'weekly' ? 12 : forecastMode === 'monthly' ? 24 : 5}
+                  max="12"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
@@ -1662,6 +1655,62 @@ CONFIG = {
             {/* TRAINING TAB */}
             {activeTab === 'training' && (
               <div className="space-y-8">
+                {/* Model Performance Summary */}
+                {modelInfo && modelInfo.models && (
+                  <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                      <span className="text-6xl">📊</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                      <span>📉</span> Model Performance Summary
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {modelInfo.models.map((model) => (
+                        <div key={model.model_key} className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:border-green-200 transition-all">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                Global {model.data_type} Model
+                              </p>
+                              <h4 className="text-lg font-bold text-gray-900">
+                                {model.data_type === 'price' ? '💰 Price Prediction' : '📦 Volume Prediction'}
+                              </h4>
+                            </div>
+                            <div className={`px-2 py-1 rounded text-xs font-bold ${model.is_loaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {model.is_loaded ? '● Loaded' : '○ Missing'}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                              <p className="text-xs text-gray-500 mb-1">Accuracy</p>
+                              <p className={`text-2xl font-black ${model.performance?.accuracy > 50 ? 'text-green-600' : 'text-amber-600'}`}>
+                                {model.performance?.accuracy ? `${model.performance.accuracy.toFixed(1)}%` : 'N/A'}
+                              </p>
+                            </div>
+                            <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                              <p className="text-xs text-gray-500 mb-1">Status</p>
+                              <p className="text-sm font-bold text-gray-700">
+                                {model.performance?.accuracy > 70 ? 'Excellent' : model.performance?.accuracy > 50 ? 'Stable' : 'Training Needed'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                            Last Trained: {model.training_date !== 'Unknown' ? new Date(model.training_date).toLocaleDateString() + ' ' + new Date(model.training_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {modelInfo.total_models === 0 && (
+                      <div className="text-center py-6 text-gray-500">
+                        No global models found. Please upload data and train the system.
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* 1. Upload & Controls */}
                 <div className="bg-white rounded-lg p-6 border border-gray-200">
                   <h3 className="text-xl font-bold text-gray-900 mb-6">🚀 Train New Models</h3>
@@ -1779,30 +1828,49 @@ CONFIG = {
                 </div>
 
                 {/* 3. Results Gallery */}
-                {!isTraining && trainingLogs.length > 0 && (
+                {!isTraining && dashboardData && (
                   <div className="bg-white rounded-lg p-6 border border-gray-200 animate-fade-in">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">📊 Generated Training Visualization</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                      <span>🖼️</span> Model Training Visualizations
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-6 italic">
+                      These plots show how the LSTM models perform on historical data for each commodity.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {dashboardData.commodities.map(commodity => (
-                        <div key={commodity} className="space-y-4">
-                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-gray-50 px-3 py-2 border-b text-sm font-semibold">{commodity} - Price</div>
+                        <div key={commodity} className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <div className="text-sm font-bold text-gray-700 pb-2 border-b border-gray-200 mb-2">{commodity} (Per Kg.)</div>
+
+                          {/* Price Plot */}
+                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                            <div className="bg-blue-50 px-3 py-1 text-[10px] font-bold text-blue-600 uppercase">Price Model</div>
                             <img
-                              src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_price_training.png`}
+                              src={`${API_BASE_URL}/plots/global_model_${commodity.toLowerCase()}_price_training.png`}
                               alt={`${commodity} Price`}
-                              className="w-full h-48 object-cover cursor-pointer hover:opacity-90"
-                              onError={(e) => { e.target.style.display = 'none' }}
-                              onClick={() => window.open(e.target.src, '_blank')}
+                              className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              onError={(e) => {
+                                const currentSrc = e.target.src;
+                                if (currentSrc.includes('global_model_')) {
+                                  e.target.src = `${API_BASE_URL}/plots/${commodity.toLowerCase()}_price_training.png`;
+                                } else {
+                                  e.target.parentElement.style.display = 'none';
+                                }
+                              }}
+                              onClick={(e) => window.open(e.target.src, '_blank')}
                             />
                           </div>
-                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-gray-50 px-3 py-2 border-b text-sm font-semibold">{commodity} - Volume</div>
+
+                          {/* Volume Plot */}
+                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                            <div className="bg-green-50 px-3 py-1 text-[10px] font-bold text-green-600 uppercase">Volume Model</div>
                             <img
                               src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_volume_training.png`}
                               alt={`${commodity} Volume`}
-                              className="w-full h-48 object-cover cursor-pointer hover:opacity-90"
-                              onError={(e) => { e.target.style.display = 'none' }}
-                              onClick={() => window.open(e.target.src, '_blank')}
+                              className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              onError={(e) => {
+                                e.target.parentElement.style.display = 'none';
+                              }}
+                              onClick={(e) => window.open(e.target.src, '_blank')}
                             />
                           </div>
                         </div>
@@ -2030,24 +2098,32 @@ CONFIG = {
                     <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">📈 Performance Metrics</h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {forecastResult.metrics.rmse !== undefined && (
+                        {(forecastResult.metrics.rmse !== undefined || forecastResult.metrics.accuracy !== undefined) && (
                           <>
-                            <div>
-                              <p className="text-sm text-gray-600">RMSE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.rmse.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">MAE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.mae.toFixed(2)}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">MAPE</p>
-                              <p className="text-xl font-bold">{forecastResult.metrics.mape.toFixed(2)}%</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">Accuracy</p>
-                              <p className="text-xl font-bold text-green-600">{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
-                            </div>
+                            {forecastResult.metrics.rmse !== undefined && (
+                              <div>
+                                <p className="text-sm text-gray-600">RMSE</p>
+                                <p className="text-xl font-bold">{forecastResult.metrics.rmse.toFixed(2)}</p>
+                              </div>
+                            )}
+                            {forecastResult.metrics.mae !== undefined && (
+                              <div>
+                                <p className="text-sm text-gray-600">MAE</p>
+                                <p className="text-xl font-bold">{forecastResult.metrics.mae.toFixed(2)}</p>
+                              </div>
+                            )}
+                            {forecastResult.metrics.mape !== undefined && (
+                              <div>
+                                <p className="text-sm text-gray-600">MAPE</p>
+                                <p className="text-xl font-bold">{forecastResult.metrics.mape.toFixed(2)}%</p>
+                              </div>
+                            )}
+                            {forecastResult.metrics.accuracy !== undefined && (
+                              <div>
+                                <p className="text-sm text-gray-600">Accuracy</p>
+                                <p className="text-xl font-bold text-green-600">{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
