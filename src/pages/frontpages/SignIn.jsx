@@ -89,27 +89,27 @@ export function SignIn() {
   };
 
   return (
-    <section className="relative flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 overflow-hidden">
-      {/* Animated Background Elements */}
+    <section className="relative flex items-center justify-center min-h-screen bg-white dark:bg-slate-950 transition-colors duration-300 p-4 overflow-hidden">
+      {/* Animated Background Elements - Subtle in Dark Mode */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-green-200 dark:bg-green-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob"></div>
+        <div className="absolute top-40 right-10 w-72 h-72 bg-emerald-200 dark:bg-emerald-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-teal-200 dark:bg-teal-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob animation-delay-4000"></div>
       </div>
 
       {/* Success/Error Toast Notification */}
       {localReply && (
         <div
           className={`fixed top-6 right-6 p-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in-right backdrop-blur-sm ${localReply.type === "success"
-              ? "bg-green-50 text-green-800 border-2 border-green-200"
-              : "bg-red-50 text-red-800 border-2 border-red-200"
+              ? "bg-green-50 dark:bg-green-900/90 text-green-800 dark:text-green-100 border-2 border-green-200 dark:border-green-800"
+              : "bg-red-50 dark:bg-red-900/90 text-red-800 dark:text-red-100 border-2 border-red-200 dark:border-red-800"
             }`}
         >
-          <div className={`p-2 rounded-full ${localReply.type === "success" ? "bg-green-100" : "bg-red-100"}`}>
+          <div className={`p-2 rounded-full ${localReply.type === "success" ? "bg-green-100 dark:bg-green-800" : "bg-red-100 dark:bg-red-800"}`}>
             {localReply.type === "success" ? (
-              <FaCheckCircle className="text-green-600 text-xl" />
+              <FaCheckCircle className="text-green-600 dark:text-green-400 text-xl" />
             ) : (
-              <FaTimes className="text-red-600 text-xl" />
+              <FaTimes className="text-red-600 dark:text-red-400 text-xl" />
             )}
           </div>
           <span className="font-medium">{localReply.message}</span>
@@ -118,9 +118,9 @@ export function SignIn() {
 
       {/* Main Card */}
       <div className="relative w-full max-w-md">
-        <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 animate-pulse-slow"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 dark:opacity-10 animate-pulse-slow"></div>
 
-        <div className="relative bg-white/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-white/20">
+        <div className="relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-white/20 dark:border-slate-800 transition-colors">
           {/* Logo and Header */}
           <div className="text-center mb-8">
             <div className="relative inline-block mb-4">
@@ -131,18 +131,18 @@ export function SignIn() {
                 className="relative w-20 h-20 mx-auto rounded-full border-4 border-white shadow-lg"
               />
             </div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400 bg-clip-text text-transparent mb-2">
               Welcome Back
             </h2>
-            <p className="text-gray-600 text-sm">Sign in to access your dashboard</p>
+            <p className="text-gray-600 dark:text-slate-400 text-sm">Sign in to access your dashboard</p>
           </div>
 
           {/* Error Alert */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg animate-shake">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg animate-shake">
               <div className="flex items-start">
                 <FaTimes className="text-red-500 mt-0.5 mr-3 flex-shrink-0" />
-                <p className="text-red-700 text-sm font-medium">{error}</p>
+                <p className="text-red-700 dark:text-red-300 text-sm font-medium">{error}</p>
               </div>
             </div>
           )}
@@ -151,7 +151,7 @@ export function SignIn() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Input */}
             <div className="relative">
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -163,9 +163,9 @@ export function SignIn() {
                   id="email"
                   type="email"
                   placeholder="name@example.com"
-                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${focusedInput === 'email'
-                      ? 'border-green-500 bg-white shadow-lg shadow-green-100'
-                      : 'border-gray-200 hover:border-gray-300'
+                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-slate-700 dark:text-slate-200 ${focusedInput === 'email'
+                      ? 'border-green-500 bg-white dark:bg-slate-800 shadow-lg shadow-green-100 dark:shadow-green-900/20'
+                      : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -179,7 +179,7 @@ export function SignIn() {
 
             {/* Password Input */}
             <div className="relative">
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Password
               </label>
               <div className="relative">
@@ -191,9 +191,9 @@ export function SignIn() {
                   id="password"
                   type={passwordShown ? "text" : "password"}
                   placeholder="Enter your password"
-                  className={`w-full pl-12 pr-12 py-3 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 ${focusedInput === 'password'
-                      ? 'border-green-500 bg-white shadow-lg shadow-green-100'
-                      : 'border-gray-200 hover:border-gray-300'
+                  className={`w-full pl-12 pr-12 py-3 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-slate-700 dark:text-slate-200 ${focusedInput === 'password'
+                      ? 'border-green-500 bg-white dark:bg-slate-800 shadow-lg shadow-green-100 dark:shadow-green-900/20'
+                      : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -223,7 +223,7 @@ export function SignIn() {
               <button
                 type="button"
                 onClick={navigateToForgotPassword}
-                className="text-sm text-green-600 hover:text-green-700 font-medium hover:underline transition-colors"
+                className="text-sm text-green-600 dark:text-green-500 hover:text-green-700 dark:hover:text-green-400 font-medium hover:underline transition-colors"
                 disabled={loading}
               >
                 Forgot password?
@@ -256,12 +256,12 @@ export function SignIn() {
           </form>
 
           {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-center text-sm text-gray-600">
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-800">
+            <p className="text-center text-sm text-gray-600 dark:text-slate-400">
               Don't have an account?{" "}
               <button
                 onClick={navigateToSignUp}
-                className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors"
+                className="text-green-600 dark:text-green-500 hover:text-green-700 dark:hover:text-green-400 font-semibold hover:underline transition-colors"
                 disabled={loading}
               >
                 Sign Up
@@ -271,8 +271,8 @@ export function SignIn() {
         </div>
 
         {/* Decorative Elements */}
-        <div className="absolute -bottom-2 -left-2 w-24 h-24 bg-green-200 rounded-full opacity-20 blur-2xl"></div>
-        <div className="absolute -top-2 -right-2 w-32 h-32 bg-emerald-200 rounded-full opacity-20 blur-2xl"></div>
+        <div className="absolute -bottom-2 -left-2 w-24 h-24 bg-green-200 dark:bg-green-900/20 rounded-full opacity-20 blur-2xl"></div>
+        <div className="absolute -top-2 -right-2 w-32 h-32 bg-emerald-200 dark:bg-emerald-900/20 rounded-full opacity-20 blur-2xl"></div>
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import ReactApexChart from "react-apexcharts";
+import { useTheme } from "../../context/ThemeContext";
 import { db } from "../../config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import {
@@ -331,52 +332,41 @@ const Reports = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-6 print:p-0 print:bg-white">
-      <div className="max-w-7xl mx-auto space-y-6 print:hidden">
-        {/* Header */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 border border-white/50">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl shadow-lg">
-                <FaFileAlt className="text-white text-3xl" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                  Agricultural Reports
-                </h1>
-                <p className="text-gray-600 text-sm mt-1">Comprehensive analytics and insights</p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gray-50 px-6 pt-2 pb-8 w-full font-sans print:p-0 print:bg-white">
+      <div className="w-full space-y-6 print:hidden">
+        {/* Header Section */}
+        <h1 className="text-3xl font-bold text-slate-800 mb-2">Agricultural Reports</h1>
+        <p className="text-sm text-slate-500 mb-8">Comprehensive analytics and insights</p>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-lg"
-              >
-                <FaDownload />
-                <span className="hidden md:inline">Export CSV</span>
-              </button>
-              <button
-                onClick={handleExportPDF}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg"
-              >
-                <FaPrint />
-                <span className="hidden md:inline">Print Master Report</span>
-              </button>
-            </div>
-          </div>
+        <div className="flex gap-3 mb-8">
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center gap-2 shadow-md shadow-green-100 active:scale-95 text-sm"
+          >
+            <FaDownload />
+            <span>Export CSV</span>
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold transition-all flex items-center gap-2 shadow-sm active:scale-95 text-sm"
+          >
+            <FaPrint />
+            <span>Master Report</span>
+          </button>
+        </div>
 
-          {/* Filters */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Filters */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-8 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaCalendar className="inline mr-2" />
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center">
+                <FaCalendar className="mr-2" />
                 Date Range
               </label>
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-slate-700 appearance-none"
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
@@ -387,14 +377,14 @@ const Reports = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaMapMarkedAlt className="inline mr-2" />
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center">
+                <FaMapMarkedAlt className="mr-2" />
                 Barangay
               </label>
               <select
                 value={selectedBarangay}
                 onChange={(e) => setSelectedBarangay(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-slate-700 appearance-none"
               >
                 <option value="all">All Barangays</option>
                 {barangays.map(b => (
@@ -404,14 +394,14 @@ const Reports = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaSeedling className="inline mr-2" />
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center">
+                <FaSeedling className="mr-2" />
                 Crop Type
               </label>
               <select
                 value={selectedCrop}
                 onChange={(e) => setSelectedCrop(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-slate-700 appearance-none"
               >
                 <option value="all">All Crops</option>
                 {crops.map(c => (
@@ -423,12 +413,12 @@ const Reports = () => {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <StatCard title="Total Farmers" value={summaryStats.totalFarmers} icon="👨‍🌾" color="from-green-400 to-emerald-500" />
-          <StatCard title="Total Hectares" value={summaryStats.totalHectares} icon="📏" color="from-blue-400 to-cyan-500" />
-          <StatCard title="Crop Types" value={summaryStats.totalVegetables} icon="🥬" color="from-yellow-400 to-orange-500" />
-          <StatCard title="Active Farms" value={summaryStats.activeFarms} icon="🌾" color="from-purple-400 to-pink-500" />
-          <StatCard title="Avg Farm Size" value={`${summaryStats.avgFarmSize} ha`} icon="📊" color="from-teal-400 to-cyan-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <StatCard title="Total Farmers" value={summaryStats.totalFarmers} icon="👨‍🌾" color="text-green-600" bg="bg-green-50" />
+          <StatCard title="Total Hectares" value={summaryStats.totalHectares} icon="📏" color="text-blue-600" bg="bg-blue-50" />
+          <StatCard title="Crop Types" value={summaryStats.totalVegetables} icon="🥬" color="text-amber-600" bg="bg-amber-50" />
+          <StatCard title="Active Farms" value={summaryStats.activeFarms} icon="🌾" color="text-purple-600" bg="bg-purple-50" />
+          <StatCard title="Avg Farm Size" value={`${summaryStats.avgFarmSize} ha`} icon="📊" color="text-teal-600" bg="bg-teal-50" />
         </div>
 
         {/* Tabs */}
@@ -1042,16 +1032,22 @@ const PrintStat = ({ title, value }) => (
   </div>
 );
 
-const StatCard = ({ title, value, unit, icon, color }) => (
-  <div className={`bg-gradient-to-br ${color} rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all transform hover:scale-105`}>
-    <div className="flex items-center justify-between">
+const StatCard = ({ title, value, unit, icon, color, bg }) => {
+  const { darkMode } = useTheme();
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 flex items-start justify-between hover:shadow-md transition-all duration-300 group">
       <div>
-        <p className="text-white/80 text-sm font-medium mb-1">{title}</p>
-        <p className="text-white text-2xl font-bold">{value}</p>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+        <div className="mt-2 flex items-baseline gap-1">
+          <span className="text-3xl font-bold text-slate-800 dark:text-white">{value}</span>
+          {unit && <span className="text-sm font-semibold text-slate-400 dark:text-gray-500">{unit}</span>}
+        </div>
       </div>
-      <div className="text-4xl opacity-80">{icon}</div>
+      <div className={`p-3 rounded-xl ${bg} ${darkMode ? 'bg-opacity-10' : ''} group-hover:scale-110 transition-transform duration-300`}>
+        <span className={`text-xl ${color}`}>{icon}</span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Reports;

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { useTheme } from "../../context/ThemeContext";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
@@ -16,6 +17,7 @@ const daOffice = { lat: 10.378622, lng: 123.230062 };
 
 const Home = () => {
   const navigate = useNavigate();
+  const { darkMode } = useTheme();
   const [search, setSearch] = useState("");
   const [userRole, setUserRole] = useState("admin");
   const [suggestions, setSuggestions] = useState([]);
@@ -311,27 +313,67 @@ const Home = () => {
     }
   };
 
+  // Market Intelligence Calculations
+  const marketStats = useMemo(() => {
+    if (!dashboardData) return null;
+
+    const volumeData = dashboardData.volume_data || [];
+    const priceData = dashboardData.price_data || [];
+
+    // Calculate total volume across all time
+    const totalVolume = volumeData.reduce((sum, item) => sum + (item.volume || 0), 0);
+
+    // Calculate growth (comparing latest month to previous month if possible)
+    const sortedVolumes = [...volumeData].sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month));
+    const currentMonthVol = sortedVolumes.length > 0 ? sortedVolumes[0].volume : 0;
+    const prevMonthVol = sortedVolumes.length > 1 ? sortedVolumes[1].volume : 0;
+    const volGrowth = prevMonthVol > 0 ? ((currentMonthVol - prevMonthVol) / prevMonthVol) * 100 : 0;
+
+    // Average price trend
+    const sortedPrices = [...priceData].sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month));
+    const currentPrice = sortedPrices.length > 0 ? sortedPrices[0].average_price : 0;
+    const prevPrice = sortedPrices.length > 1 ? sortedPrices[1].average_price : 0;
+    const priceGrowth = prevPrice > 0 ? ((currentPrice - prevPrice) / prevPrice) * 100 : 0;
+
+    // Trending crops (highest volume in latest data)
+    const latestMonth = sortedVolumes.length > 0 ? sortedVolumes[0].month : null;
+    const latestYear = sortedVolumes.length > 0 ? sortedVolumes[0].year : null;
+    const latestCommodities = volumeData
+      .filter(v => v.month === latestMonth && v.year === latestYear)
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 3);
+
+    return {
+      totalVolume,
+      volGrowth,
+      currentPrice,
+      priceGrowth,
+      latestCommodities,
+      status: volGrowth >= 0 ? "Volume Increasing" : "Volume Decreasing"
+    };
+  }, [dashboardData]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
+          <div className="w-16 h-16 border-4 border-green-200 dark:border-slate-800 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-12 font-sans">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 px-6 pt-2 pb-8 w-full font-sans transition-colors duration-300">
       {/* Search Header - Floating & Minimal */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 mb-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 -mx-6 px-6 py-4 mb-4">
+        <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
               Dashboard
             </h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Overview of agricultural activities in Canlaon City.
             </p>
           </div>
@@ -347,29 +389,29 @@ const Home = () => {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleSearchSubmit}
                 placeholder="Search farmers, crops, maps..."
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all"
               />
             </div>
 
             {/* Search Dropdown - Unchanged Logic, Updated Style */}
             {isDropdownOpen && suggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-96 overflow-y-auto">
+              <ul className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-xl max-h-96 overflow-y-auto">
                 {suggestions.map((item, index) => {
                   const Icon = item.icon;
                   return (
                     <li
                       key={`${item.type}-${index}`}
                       onClick={() => handleSuggestionClick(item)}
-                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center space-x-3 group transition-colors"
+                      className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer border-b border-gray-50 dark:border-slate-800 last:border-0 flex items-center space-x-3 group transition-colors"
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.type === 'farmer' ? 'bg-green-50 text-green-600' :
-                        item.type === 'vegetable' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.type === 'farmer' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' :
+                        item.type === 'vegetable' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
                         }`}>
                         <Icon className="text-sm" />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 text-sm">{item.name}</p>
-                        <p className="text-xs text-gray-500">{item.details || item.type}</p>
+                        <p className="font-medium text-gray-900 dark:text-white text-sm">{item.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{item.details || item.type}</p>
                       </div>
                     </li>
                   );
@@ -379,50 +421,64 @@ const Home = () => {
           </div>
         </div>
       </div>
-
-      <div className="max-w-7xl mx-auto px-6 space-y-8">
+ 
+      <div className="w-full space-y-8">
 
         {/* Welcome Section - Deleted (Combined into Header) */}
 
         {/* 1. Key Metrics - Clean & Spacious */}
         <section>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <FaUsers className="text-6xl text-green-600" />
               </div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Total Farmers</p>
-              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalFarmers}</h3>
-              <div className="mt-4 flex items-center text-xs font-medium text-green-600 bg-green-50 w-fit px-2 py-1 rounded-full">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Total Farmers</p>
+              <h3 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{stats.totalFarmers}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/20 w-fit px-2 py-1 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-2"></div>
                 Active Registered
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <FaMapMarkerAlt className="text-6xl text-blue-600" />
               </div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Total Free Hectares</p>
-              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalHectares}</h3>
-              <div className="mt-4 flex items-center text-xs font-medium text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded-full">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Total Free Hectares</p>
+              <h3 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{stats.totalHectares}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/20 w-fit px-2 py-1 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2"></div>
                 Cultivated Land
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <FaSeedling className="text-6xl text-amber-600" />
               </div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Crop Varieties</p>
-              <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{stats.totalVegetables}</h3>
-              <div className="mt-4 flex items-center text-xs font-medium text-amber-600 bg-amber-50 w-fit px-2 py-1 rounded-full">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Crop Varieties</p>
+              <h3 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{stats.totalVegetables}</h3>
+              <div className="mt-4 flex items-center text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/20 w-fit px-2 py-1 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-2"></div>
                 Monitored Types
               </div>
             </div>
 
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <FaChartLine className="text-6xl text-purple-600" />
+              </div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Market Volume Trend</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 -mt-1 mb-2">Monthly activity basis</p>
+              <h3 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                {marketStats ? marketStats.status : "N/A"}
+              </h3>
+              <div className={`mt-4 flex items-center text-xs font-medium ${marketStats?.volGrowth >= 0 ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'} w-fit px-2 py-1 rounded-full`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${marketStats?.volGrowth >= 0 ? 'bg-green-500' : 'bg-red-500'} mr-2`}></div>
+                {marketStats ? `${marketStats.volGrowth >= 0 ? '+' : ''}${marketStats.volGrowth.toFixed(1)}% Volume` : "Calculating..."}
+              </div>
+            </div>
 
           </div>
         </section>
@@ -432,20 +488,20 @@ const Home = () => {
 
           {/* Left Column: Map - Clean Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
-              <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center bg-white">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <FaMap className="text-green-600" />
                   Geospatial Overview
                 </h3>
                 <button
                   onClick={() => navigate('/home/maps')}
-                  className="text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                  className="text-xs font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
                 >
                   Expand Map <FaExpand />
                 </button>
               </div>
-              <div className="flex-1 relative z-0">
+              <div className="h-[420px] relative z-0">
                 <MapContainer
                   center={defaultCenter}
                   zoom={defaultZoom}
@@ -456,7 +512,7 @@ const Home = () => {
                   className="z-0"
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    url={darkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"}
                     attribution='&copy; OpenStreetMap contributors'
                   />
                   <ZoomControl position="bottomright" />
@@ -469,7 +525,7 @@ const Home = () => {
                     <Popup>
                       <div className="p-2">
                         <h3 className="font-semibold text-blue-600 text-sm">DA Office Canlaon</h3>
-                        <p className="text-xs text-gray-600">Central Office</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Central Office</p>
                       </div>
                     </Popup>
                   </Marker>
@@ -507,7 +563,7 @@ const Home = () => {
                               </div>
                               <button
                                 onClick={() => navigate(`/home/farmer/${farm.id}`)}
-                                className="mt-2 w-full py-1 text-xs font-medium text-green-600 bg-green-50 rounded hover:bg-green-100 transition-colors"
+                                className="mt-2 w-full py-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                               >
                                 View Details
                               </button>
@@ -521,49 +577,118 @@ const Home = () => {
               </div>
             </div>
 
+            {/* Market Intelligence Insights */}
+            {marketStats && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                  <span className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                    <FaChartLine className="text-purple-600 dark:text-purple-400 text-sm" />
+                  </span>
+                  Market Performance Details
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Trending Commodities */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                      <FaTractor className="text-green-500" /> Trending by Volume
+                    </h4>
+                    <div className="space-y-4">
+                      {marketStats.latestCommodities.map((item, idx) => (
+                        <div key={item.commodity} className="flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                              idx === 0 ? 'bg-amber-100 text-amber-700' : 
+                              idx === 1 ? 'bg-slate-100 text-slate-700' : 'bg-orange-100 text-orange-700'
+                            }`}>
+                              #{idx + 1}
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.commodity}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{item.volume.toLocaleString()} kg total</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">High Demand</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Price Alerts/Insights */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                      <FaChartBar className="text-blue-500" /> Market Price Activity
+                    </h4>
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Average price trend is</p>
+                        <span className={`text-sm font-bold ${marketStats.priceGrowth >= 0 ? 'text-green-600' : 'text-amber-600'}`}>
+                          {marketStats.priceGrowth >= 0 ? 'Increasing' : 'Decreasing'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${marketStats.priceGrowth >= 0 ? 'bg-green-500' : 'bg-amber-500'}`} 
+                            style={{ width: `${Math.min(100, Math.abs(marketStats.priceGrowth * 5))}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-gray-500">{Math.abs(marketStats.priceGrowth).toFixed(1)}%</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-4 leading-relaxed italic">
+                        * Comparison based on the most recent monthly reporting cycles.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Market Analytics - Moved below Map for better flow on large screens */}
             {dashboardData && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div onClick={() => navigate('/home/dashboard')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                <div onClick={() => navigate('/home/dashboard')} className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:border-green-100 dark:hover:border-green-900/30 hover:shadow-md transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
-                      <FaDatabase className="text-blue-600" />
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+                      <FaDatabase className="text-blue-600 dark:text-blue-400" />
                     </div>
-                    <FaArrowRight className="text-gray-300 group-hover:text-blue-500 transition-colors text-sm" />
+                    <FaArrowRight className="text-gray-300 dark:text-gray-600 group-hover:text-blue-500 transition-colors text-sm" />
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                  <h4 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
                     {dashboardData.volume_data?.reduce((sum, item) => sum + item.volume, 0).toLocaleString() || 0}
-                    <span className="text-sm font-normal text-gray-400 ml-1">kg</span>
+                    <span className="text-sm font-normal text-gray-400 dark:text-gray-500 ml-1">kg</span>
                   </h4>
-                  <p className="text-sm text-gray-500">Total Volume Traded</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Volume Traded</p>
                 </div>
 
-                <div onClick={() => navigate('/home/dashboard')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                <div onClick={() => navigate('/home/dashboard')} className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:border-green-100 dark:hover:border-green-900/30 hover:shadow-md transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="p-2 bg-green-50 rounded-lg group-hover:bg-green-100 transition-colors">
-                      <FaChartBar className="text-green-600" />
+                    <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg group-hover:bg-green-100 dark:group-hover:bg-green-900/30 transition-colors">
+                      <FaChartBar className="text-green-600 dark:text-green-400" />
                     </div>
-                    <FaArrowRight className="text-gray-300 group-hover:text-green-500 transition-colors text-sm" />
+                    <FaArrowRight className="text-gray-300 dark:text-gray-600 group-hover:text-green-500 transition-colors text-sm" />
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                  <h4 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
                     ₱{(dashboardData.price_data?.length > 0
                       ? (dashboardData.price_data.reduce((sum, item) => sum + item.average_price, 0) / dashboardData.price_data.length)
                       : 0).toFixed(2)}
                   </h4>
-                  <p className="text-sm text-gray-500">Average Market Price</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Average Market Price</p>
                 </div>
 
-                <div onClick={() => navigate('/home/vegetables')} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-green-100 hover:shadow-md transition-all cursor-pointer group">
+                <div onClick={() => navigate('/home/vegetables')} className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:border-green-100 dark:hover:border-green-900/30 hover:shadow-md transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
-                      <FaLeaf className="text-purple-600" />
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 transition-colors">
+                      <FaLeaf className="text-purple-600 dark:text-purple-400" />
                     </div>
-                    <FaArrowRight className="text-gray-300 group-hover:text-purple-500 transition-colors text-sm" />
+                    <FaArrowRight className="text-gray-300 dark:text-gray-600 group-hover:text-purple-500 transition-colors text-sm" />
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-900 mb-1">
+                  <h4 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
                     {dashboardData.commodities?.length || 0}
                   </h4>
-                  <p className="text-sm text-gray-500">Active Commodities</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Commodities</p>
                 </div>
               </div>
             )}
@@ -573,8 +698,8 @@ const Home = () => {
           <div className="space-y-6">
 
             {/* Quick Actions - Grid of Icon Cards */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-3">
                 {quickActions.map((action) => {
                   const Icon = action.icon;
@@ -582,10 +707,10 @@ const Home = () => {
                     <button
                       key={action.name}
                       onClick={() => navigate(action.path)}
-                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200 group text-center"
+                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-slate-700 group text-center"
                     >
                       <Icon className={`text-xl mb-2 ${action.color.split(' ')[2]}`} />
-                      <span className="text-xs font-semibold text-gray-700 group-hover:text-gray-900">{action.name}</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">{action.name}</span>
                     </button>
                   );
                 })}
@@ -593,20 +718,20 @@ const Home = () => {
             </div>
 
             {/* Activities - List Style */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Recent Activities</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activities</h3>
               </div>
 
               <div className="space-y-4">
                 {recentActivity.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">No recent activities</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">No recent activities</p>
                 ) : recentActivity.map((activity, index) => (
-                  <div key={`${activity.id}-${index}`} className="flex gap-3 items-start p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div key={`${activity.id}-${index}`} className="flex gap-3 items-start p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
                     <div className="mt-1"><FaCheckCircle className="text-green-500" /></div>
                     <div>
-                      <p className="text-sm text-gray-800 font-medium leading-tight">{activity.action}</p>
-                      <p className="text-xs text-gray-500 mt-1">{activity.user} • {activity.time}</p>
+                      <p className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-tight">{activity.action}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{activity.user} • {activity.time}</p>
                     </div>
                   </div>
                 ))}
@@ -615,8 +740,8 @@ const Home = () => {
 
             {/* Top Crops - List Style */}
             {topCrops.length > 0 && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Top Crops</h3>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Top Crops</h3>
                 <div className="space-y-4">
                   {topCrops.map((crop, index) => (
                     <div key={crop.name} className="flex items-center justify-between group">
@@ -627,7 +752,7 @@ const Home = () => {
                           <p className="text-xs text-gray-500">{crop.count} farms</p>
                         </div>
                       </div>
-                      <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="w-16 h-1 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-green-500 rounded-full"
                           style={{ width: `${(crop.count / Math.max(...topCrops.map(c => c.count))) * 100}%` }}

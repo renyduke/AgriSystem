@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useTheme } from "../../context/ThemeContext";
 import ReactApexChart from "react-apexcharts";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -40,6 +41,7 @@ const center = [10.3903, 123.2224];
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
 const AgriDashboard = () => {
+  const { darkMode } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [totalFarmers, setTotalFarmers] = useState(0);
@@ -182,7 +184,7 @@ const AgriDashboard = () => {
       background: 'transparent',
       fontFamily: 'Inter, sans-serif'
     },
-    theme: { mode: 'light' },
+    theme: { mode: darkMode ? 'dark' : 'light' },
     dataLabels: { enabled: false },
     grid: { borderColor: '#f3f4f6', strokeDashArray: 4 },
   };
@@ -200,7 +202,7 @@ const AgriDashboard = () => {
     },
     xaxis: {
       categories: farmerCropTrends.map(item => item.name),
-      labels: { style: { fontSize: '12px', colors: '#64748b' } },
+      labels: { style: { fontSize: '12px', colors: darkMode ? '#94a3b8' : '#64748b' } },
       axisBorder: { show: false },
       axisTicks: { show: false }
     },
@@ -227,9 +229,9 @@ const AgriDashboard = () => {
     },
     xaxis: {
       categories: highDemandVeggies.map(item => item.name),
-      labels: { style: { colors: '#64748b' } }
+      labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' } }
     },
-    yaxis: { labels: { style: { colors: '#64748b' } } },
+    yaxis: { labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' } } },
   };
 
   const topFarmersOptions = {
@@ -245,9 +247,9 @@ const AgriDashboard = () => {
     },
     xaxis: {
       categories: topProducingFarmers.map(item => item.name),
-      labels: { style: { colors: '#64748b' } }
+      labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' } }
     },
-    yaxis: { labels: { style: { colors: '#64748b', fontSize: '13px', fontWeight: 500 } } },
+    yaxis: { labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '13px', fontWeight: 500 } } },
   };
 
   const landOwnershipOptions = {
@@ -262,21 +264,21 @@ const AgriDashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
         <Loading fullScreen={false} text="Loading analytics data..." />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-6 transition-colors duration-300">
+      <div className="w-full px-6 pt-2 pb-6 space-y-6">
 
         {/* Header Section */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Analytics Dashboard</h1>
-            <p className="text-gray-500 mt-1">Real-time insights on Canlaon's agricultural landscape</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Farmer Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Real-time insights on Canlaon's agricultural landscape</p>
           </div>
 
         </header>
@@ -291,25 +293,25 @@ const AgriDashboard = () => {
         {/* Charts Section - Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Production Trends (Main Chart - spans 2 cols) */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-50 rounded-lg">
-                  <FaChartLine className="text-green-600 text-lg" />
+                <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <FaChartLine className="text-green-600 dark:text-green-400 text-lg" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-800">Production Yield Trends</h2>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Production Yield Trends</h2>
               </div>
             </div>
             <ReactApexChart options={prodTrendsOptions} series={[{ name: 'Production (ha)', data: highDemandVeggies.map(item => item.value) }]} type="area" height={350} />
           </div>
 
           {/* Land Ownership (Donut Chart) */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <FaChartPie className="text-purple-600 text-lg" />
+              <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <FaChartPie className="text-purple-600 dark:text-purple-400 text-lg" />
               </div>
-              <h2 className="text-lg font-bold text-gray-800">Land Ownership</h2>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Land Ownership</h2>
             </div>
             <div className="flex items-center justify-center h-[300px]">
               <ReactApexChart options={landOwnershipOptions} series={landOwnershipDistribution.map(item => item.count)} type="donut" width="100%" />
@@ -320,23 +322,23 @@ const AgriDashboard = () => {
         {/* Charts Section - Row 2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Top Farmers */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <FaTractor className="text-blue-600 text-lg" />
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <FaTractor className="text-blue-600 dark:text-blue-400 text-lg" />
               </div>
-              <h2 className="text-lg font-bold text-gray-800">Top Producers</h2>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Top Producers</h2>
             </div>
             <ReactApexChart options={topFarmersOptions} series={[{ name: 'Hectares', data: topProducingFarmers.map(item => item.production) }]} type="bar" height={320} />
           </div>
 
           {/* Crop Popularity */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <FaSeedling className="text-orange-600 text-lg" />
+              <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <FaSeedling className="text-orange-600 dark:text-orange-400 text-lg" />
               </div>
-              <h2 className="text-lg font-bold text-gray-800">Crop Popularity</h2>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Crop Popularity</h2>
             </div>
             <ReactApexChart options={cropTrendsOptions} series={[{ name: 'Farmers', data: farmerCropTrends.map(item => item.count) }]} type="bar" height={320} />
           </div>
@@ -346,19 +348,19 @@ const AgriDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Production Map (spans 2 cols) */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-50 rounded-lg">
-                  <FaMapMarkedAlt className="text-red-600 text-lg" />
+                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                  <FaMapMarkedAlt className="text-red-600 dark:text-red-400 text-lg" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-800">Production Zones</h2>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Production Zones</h2>
               </div>
-              <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-1 rounded-md">Live View</span>
+              <span className="text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-1 rounded-md">Live View</span>
             </div>
             <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-100 relative z-0">
               <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer url={darkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"} />
                 {farmersData
                   .filter((farm) => farm.coordinates && farm.coordinates.length === 2)
                   .map((farm) => (
@@ -415,21 +417,21 @@ const AgriDashboard = () => {
             </div>
 
             {/* Recent Activities */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+              <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
                 <FaTractor className="text-gray-400" /> Recent Activity
               </h3>
               <div className="space-y-4">
                 {recentActivities.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3 pb-3 border-b border-gray-50 last:border-0 last:pb-0">
-                    <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-green-50 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
                       {getActivityIcon(activity.type)}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{activity.name}</p>
-                      <p className="text-xs text-gray-500">Updated profile details</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Updated profile details</p>
                     </div>
-                    <span className="text-xs text-gray-400 ml-auto">{new Date(activity.timestamp).toLocaleDateString()}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{new Date(activity.timestamp).toLocaleDateString()}</span>
                   </div>
                 ))}
                 {recentActivities.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>}
@@ -444,19 +446,22 @@ const AgriDashboard = () => {
   );
 };
 
-const StatCard = ({ title, value, unit, icon, color, bg }) => (
-  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start justify-between hover:shadow-md transition-shadow">
-    <div>
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-      <div className="mt-2 flex items-baseline gap-1">
-        <span className="text-3xl font-bold text-gray-900">{value}</span>
-        {unit && <span className="text-sm font-medium text-gray-400">{unit}</span>}
+const StatCard = ({ title, value, unit, icon, color, bg }) => {
+  const { darkMode } = useTheme();
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6 flex items-start justify-between hover:shadow-md transition-shadow">
+      <div>
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+        <div className="mt-2 flex items-baseline gap-1">
+          <span className="text-3xl font-bold text-gray-900 dark:text-white">{value}</span>
+          {unit && <span className="text-sm font-medium text-gray-400 dark:text-gray-500">{unit}</span>}
+        </div>
+      </div>
+      <div className={`p-3 rounded-xl ${bg} ${darkMode ? 'bg-opacity-10' : ''}`}>
+        <span className={`text-xl ${color}`}>{icon}</span>
       </div>
     </div>
-    <div className={`p-3 rounded-xl ${bg}`}>
-      <span className={`text-xl ${color}`}>{icon}</span>
-    </div>
-  </div>
-);
+  );
+};
 
 export default AgriDashboard;

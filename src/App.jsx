@@ -4,6 +4,7 @@ import SignIn from "./pages/frontpages/SignIn";
 import ForgotPassword from "./pages/frontpages/ForgotPassword";
 import SignUp from "./pages/AdminPages/SignUp";
 import AdminDashboard from "./pages/AdminPages/Home";
+import Account from "./pages/AdminPages/Account";
 import Maps from "./pages/AdminPages/Maps";
 import Vegetables from "./pages/Vegetables";
 import Profile from "./pages/AdminPages/Profile";
@@ -40,6 +41,7 @@ function App() {
         {/* Admin Routes - Protected Dashboard Area */}
         <Route path="/home" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
+          <Route path="account" element={<Account />} />
           <Route path="maps" element={<Maps />} />
           <Route path="vegetables" element={<Vegetables />} />
           <Route path="profile" element={<Profile />} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../config/firebaseConfig';
+import { useTheme } from '../../context/ThemeContext';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import axios from 'axios';
 import {
@@ -256,94 +257,43 @@ const FarmerBankingPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+    <div className="min-h-screen bg-gray-50 px-6 pt-2 pb-8 w-full font-sans">
       {/* Header */}
-      <header className="bg-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">🏦 Farmer Data Banking</h1>
-              <p className="text-sm text-gray-600 mt-1">Financial insights and market intelligence</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={downloadCSV}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <FaDownload />
-                <span>Export CSV</span>
-              </button>
-              <button
-                onClick={handlePrint}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <FaPrint />
-                <span>Print</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <h1 className="text-3xl font-bold text-slate-800 mb-2">Farmer Data Banking</h1>
+      <p className="text-sm text-slate-500 mb-8">Financial insights and market intelligence</p>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="flex gap-3 mb-8">
+        <button
+          onClick={downloadCSV}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center gap-2 shadow-md shadow-green-100 active:scale-95 text-sm"
+        >
+          <FaDownload />
+          <span>Export CSV</span>
+        </button>
+        <button
+          onClick={handlePrint}
+          className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold transition-all flex items-center gap-2 shadow-sm active:scale-95 text-sm"
+        >
+          <FaPrint />
+          <span>Print Report</span>
+        </button>
+      </div>
+
+      <main className="w-full">
         {/* Dashboard Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Farmers</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{totalFarmers}</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaUser className="text-blue-600 text-xl" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Hectares</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{totalHectares.toFixed(2)}</p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaTractor className="text-green-600 text-xl" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Active Crops</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{totalCrops}</p>
-              </div>
-              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                <FaLeaf className="text-amber-600 text-xl" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Est. Total Value</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">₱{(totalEstimatedValue / 1000).toFixed(1)}K</p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FaMoneyBillWave className="text-purple-600 text-xl" />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard title="Total Farmers" value={totalFarmers} icon={<FaUser />} color="text-blue-600" bg="bg-blue-50" />
+          <StatCard title="Total Hectares" value={totalHectares.toFixed(2)} icon={<FaTractor />} color="text-green-600" bg="bg-green-50" />
+          <StatCard title="Active Crops" value={totalCrops} icon={<FaLeaf />} color="text-amber-600" bg="bg-amber-50" />
+          <StatCard title="Est. Total Value" value={`₱${(totalEstimatedValue / 1000).toFixed(1)}K`} icon={<FaMoneyBillWave />} color="text-purple-600" bg="bg-purple-50" />
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-8 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <FaSearch className="mr-2 text-gray-400" />
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center">
+                <FaSearch className="mr-2" />
                 Search Farmers
               </label>
               <input
@@ -351,19 +301,19 @@ const FarmerBankingPage = () => {
                 placeholder="Search by name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-slate-700"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <FaFilter className="mr-2 text-gray-400" />
+              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center">
+                <FaFilter className="mr-2" />
                 Filter by Crop
               </label>
               <select
                 value={filterCrop}
                 onChange={(e) => setFilterCrop(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-slate-700 appearance-none"
               >
                 <option value="">All Crops</option>
                 {allCrops.map(crop => (
@@ -373,7 +323,7 @@ const FarmerBankingPage = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-gray-500 mt-4">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-6">
             <span>Showing {filteredFarmers.length} of {totalFarmers} farmers</span>
             {(searchQuery || filterCrop) && (
               <button
@@ -381,7 +331,7 @@ const FarmerBankingPage = () => {
                   setSearchQuery('');
                   setFilterCrop('');
                 }}
-                className="text-green-600 hover:text-green-700 flex items-center"
+                className="text-green-600 hover:text-green-700 flex items-center transition-colors"
               >
                 <FaTimes className="mr-1" />
                 Clear filters
@@ -572,5 +522,20 @@ const FarmerBankingPage = () => {
     </div>
   );
 };
+
+const StatCard = ({ title, value, unit, icon, color, bg }) => (
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-start justify-between hover:shadow-md transition-all duration-300 group">
+    <div>
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-3xl font-bold text-slate-800">{value}</span>
+        {unit && <span className="text-sm font-semibold text-slate-400">{unit}</span>}
+      </div>
+    </div>
+    <div className={`p-3 rounded-xl ${bg} group-hover:scale-110 transition-transform duration-300`}>
+      <span className={`text-xl ${color}`}>{icon}</span>
+    </div>
+  </div>
+);
 
 export default FarmerBankingPage;

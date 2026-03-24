@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTheme } from "../context/ThemeContext";
 import { db } from "../config/firebaseConfig";
 import {
   collection,
@@ -8,6 +9,7 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
+import { logActivity } from "../services/activityLogger";
 import {
   Plus,
   Trash2,
@@ -48,6 +50,7 @@ class ErrorBoundary extends React.Component {
 }
 
 const Vegetables = () => {
+  const { darkMode } = useTheme();
   const [vegetables, setVegetables] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newVeggieName, setNewVeggieName] = useState("");
@@ -99,6 +102,7 @@ const Vegetables = () => {
       });
       setNewVeggieName("");
       await fetchVegetables();
+      logActivity('add', 'Vegetable', newVeggieName.trim());
       showNotification("Vegetable added successfully!");
     } catch (error) {
       console.error("Error adding vegetable:", error);
@@ -125,6 +129,7 @@ const Vegetables = () => {
         setEditingVeggie(null);
         setEditVeggieName("");
         await fetchVegetables();
+        logActivity('update', 'Vegetable', editVeggieName.trim());
         showNotification("Vegetable updated successfully!");
       } catch (error) {
         console.error("Error editing vegetable:", error);
@@ -141,8 +146,10 @@ const Vegetables = () => {
     if (window.confirm("Are you sure you want to delete this vegetable?")) {
       try {
         setLoading(true);
+        const deletedVeg = vegetables.find((v) => v.id === veggieId);
         await deleteDoc(doc(db, "vegetables_list", veggieId));
         await fetchVegetables();
+        logActivity('delete', 'Vegetable', deletedVeg?.name || veggieId);
         showNotification("Vegetable deleted successfully");
       } catch (error) {
         console.error("Error deleting vegetable:", error);
@@ -158,19 +165,19 @@ const Vegetables = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-        <div className="max-w-6xl mx-auto space-y-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 px-6 pt-2 pb-6 font-sans transition-colors duration-300">
+        <div className="w-full space-y-8">
 
           {/* Header Section */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
             <div>
-              <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Leaf className="w-8 h-8 text-green-600" />
+              <h1 className="text-3xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
+                <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                  <Leaf className="w-8 h-8 text-green-600 dark:text-green-400" />
                 </div>
                 Vegetable Management
               </h1>
-              <p className="text-slate-500 mt-2 text-sm md:text-base">
+              <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm md:text-base">
                 Manage your vegetable inventory efficiently
               </p>
             </div>
@@ -183,14 +190,14 @@ const Vegetables = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl w-full md:w-auto focus-within:ring-2 focus-within:ring-green-500 transition-all">
-              <Search className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-xl w-full md:w-auto focus-within:ring-2 focus-within:ring-green-500 transition-all">
+              <Search className="w-5 h-5 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search vegetables..."
-                className="bg-transparent border-none outline-none w-full md:w-64 text-slate-700 placeholder:text-slate-400"
+                className="bg-transparent border-none outline-none w-full md:w-64 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -199,22 +206,22 @@ const Vegetables = () => {
 
             {/* Add New Vegetable Card */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-8">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 sticky top-8">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <Sprout className="w-6 h-6 text-green-600" />
+                  <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <Sprout className="w-6 h-6 text-green-600 dark:text-green-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-800">Add New Item</h3>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Add New Item</h3>
                 </div>
 
                 <form onSubmit={handleAddVegetable} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-2">Vegetable Name</label>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Vegetable Name</label>
                     <input
                       type="text"
                       value={newVeggieName}
                       onChange={(e) => setNewVeggieName(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="E.g., Tomato"
                       disabled={loading}
                     />
@@ -230,10 +237,10 @@ const Vegetables = () => {
                   </button>
                 </form>
 
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                  <div className="flex justify-between items-center text-sm text-slate-500">
+                <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex justify-between items-center text-sm text-slate-500 dark:text-slate-400">
                     <span>Total Items</span>
-                    <span className="font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-full">{vegetables.length}</span>
+                    <span className="font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{vegetables.length}</span>
                   </div>
                 </div>
               </div>
@@ -246,7 +253,7 @@ const Vegetables = () => {
                   <Loading fullScreen={false} />
                 </div>
               ) : filteredVegetables.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
+                <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500">
                   <Leaf className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-lg font-medium">{searchTerm ? "No results found" : "Your list is empty"}</p>
                 </div>
@@ -255,7 +262,7 @@ const Vegetables = () => {
                   {filteredVegetables.map((vegetable) => (
                     <div
                       key={vegetable.id}
-                      className="group bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-200 focus-within:ring-2 focus-within:ring-green-500"
+                      className="group bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all duration-200 focus-within:ring-2 focus-within:ring-green-500"
                     >
                       {editingVeggie?.id === vegetable.id ? (
                         <div className="flex items-center gap-2 animate-fade-in">
@@ -263,7 +270,7 @@ const Vegetables = () => {
                             type="text"
                             value={editVeggieName}
                             onChange={(e) => setEditVeggieName(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-green-500"
+                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-green-500 text-slate-700 dark:text-slate-200"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleEditVegetable(vegetable);
@@ -272,14 +279,14 @@ const Vegetables = () => {
                           />
                           <button
                             onClick={() => handleEditVegetable(vegetable)}
-                            className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                            className="p-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors"
                             title="Save"
                           >
                             <Save className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => setEditingVeggie(null)}
-                            className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                            className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                             title="Cancel"
                           >
                             <X className="w-4 h-4" />
@@ -288,10 +295,10 @@ const Vegetables = () => {
                       ) : (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center text-green-600 font-bold text-lg select-none">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 flex items-center justify-center text-green-600 dark:text-green-400 font-bold text-lg select-none">
                               {vegetable.name.charAt(0).toUpperCase()}
                             </div>
-                            <span className="font-semibold text-slate-700 truncate max-w-[120px] sm:max-w-[150px]">
+                            <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px] sm:max-w-[150px]">
                               {vegetable.name}
                             </span>
                           </div>
@@ -302,14 +309,14 @@ const Vegetables = () => {
                                 setEditingVeggie(vegetable);
                                 setEditVeggieName(vegetable.name);
                               }}
-                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              className="p-2 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
                               title="Edit"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteVegetable(vegetable.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />

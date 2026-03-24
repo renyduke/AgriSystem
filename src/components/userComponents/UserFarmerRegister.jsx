@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../config/firebaseConfig";
 import { collection, addDoc, getDocs } from "firebase/firestore";
+import { logActivity } from "../../services/activityLogger";
 import { FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaPlus, FaCalendarAlt, FaTimes, FaInfoCircle, FaSpinner, FaCheckCircle } from "react-icons/fa";
 import canlaonLocations from "../../data/canlaonLocations";
 import axios from 'axios';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useTheme } from "../../context/ThemeContext";
 
 const FarmerRegister = () => {
+  const { darkMode } = useTheme();
   const [farmerData, setFarmerData] = useState({
     firstName: "",
     lastName: "",
@@ -277,6 +280,7 @@ const FarmerRegister = () => {
       );
       await Promise.all(vegetablePromises);
 
+      logActivity('add', 'Farmer', `${capitalizeFirstLetter(farmerData.firstName)} ${capitalizeFirstLetter(farmerData.lastName)}`);
       setLocalReply({ type: "success", message: "Farmer registered successfully (Localhost)" });
       setShowMapPreview(true);
       setFarmerData({
@@ -314,264 +318,435 @@ const FarmerRegister = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-100 via-green-50 to-teal-100 flex items-center justify-center p-4 md:p-6 ">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-auto p-6 md:p-8 relative">
-        <h2 className="text-2xl md:text-3xl font-bold text-green-900 mb-6 text-center flex items-center justify-center">
-          <FaUser className="mr-2 text-green-600" /> Farmer Registration
-        </h2>
-        {error && <div className="bg-red-100 text-red-700 p-3 rounded-xl mb-4 text-center">{error}</div>}
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 px-6 pt-2 pb-6 relative font-sans transition-colors duration-300">
+      <div className="w-full">
+        <div className="mb-10">
+          <h2 className="text-3xl font-bold text-slate-800 dark:text-gray-100">Farmer Registration</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Submit a new farmer record to the agricultural database.</p>
+        </div>
+
+        {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-700 dark:text-red-300 p-4 rounded-2xl mb-8 flex items-center gap-3">
+          <FaInfoCircle className="flex-shrink-0" />
+          <span className="text-sm font-medium">{error}</span>
+        </div>}
+        
         {localReply && (
-          <div className={`fixed top-4 right-4 p-4 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in-out ${localReply.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+          <div className={`fixed top-4 right-4 p-4 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in-out z-[100] ${localReply.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
             {localReply.type === "success" ? <FaCheckCircle className="text-green-600" /> : <FaTimes className="text-red-600" />}
             <span>{localReply.message}</span>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center border rounded-xl p-3 bg-green-50">
-              <FaUser className="text-green-700 mx-2" />
-              <input
-                type="text"
-                name="firstName"
-                placeholder="First Name"
-                value={farmerData.firstName}
-                onChange={handleChange}
-                title="First name should only contain letters"
-                className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                required
-              />
-            </div>
-            <div className="flex items-center border rounded-xl p-3 bg-green-50">
-              <FaUser className="text-green-700 mx-2" />
-              <input
-                type="text"
-                name="lastName"
-                placeholder="Last Name"
-                value={farmerData.lastName}
-                onChange={handleChange}
-                title="Last name should only contain letters"
-                className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                required
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              name="age"
-              placeholder="Age"
-              value={farmerData.age}
-              onChange={handleChange}
-              title="Age should only contain numbers"
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            />
-            <select
-              name="sex"
-              value={farmerData.sex}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            >
-              <option value="">Select Sex</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </div>
-
-          <div className="flex items-center border rounded-xl p-3 bg-green-50">
-            <FaPhone className="text-green-700 mx-2" />
-            <input
-              type="text"
-              name="contact"
-              placeholder="Contact Number (11 digits)"
-              value={farmerData.contact}
-              onChange={handleChange}
-              maxLength="11"
-              className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center border rounded-xl p-3 bg-green-50">
-              <FaMapMarkerAlt className="text-green-700 mx-2" />
-              <select
-                name="addressBarangay"
-                value={farmerData.addressBarangay}
-                onChange={handleChange}
-                className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                required
-              >
-                <option value="">Select Barangay (Address)</option>
-                {Object.keys(canlaonLocations).map((barangay) => (
-                  <option key={barangay} value={barangay}>{barangay}</option>
-                ))}
-              </select>
-            </div>
-            <select
-              name="addressSitio"
-              value={farmerData.addressSitio}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-              disabled={!selectedAddressBarangay}
-            >
-              <option value="">Select Sitio/Purok</option>
-              {selectedAddressBarangay && canlaonLocations[selectedAddressBarangay].sitios.map((sitio) => (
-                <option key={sitio.name} value={sitio.name}>{sitio.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center border rounded-xl p-3 bg-green-50">
-              <FaMapMarkerAlt className="text-green-700 mx-2" />
-              <select
-                name="farmBarangay"
-                value={farmerData.farmBarangay}
-                onChange={handleChange}
-                className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                required
-              >
-                <option value="">Select Barangay (Farm)</option>
-                {Object.keys(canlaonLocations).map((barangay) => (
-                  <option key={barangay} value={barangay}>{barangay}</option>
-                ))}
-              </select>
-            </div>
-            <select
-              name="farmSitio"
-              value={farmerData.farmSitio}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-              disabled={!selectedFarmBarangay}
-            >
-              <option value="">Select Sitio/Purok</option>
-              {selectedFarmBarangay && canlaonLocations[selectedFarmBarangay].sitios.map((sitio) => (
-                <option key={sitio.name} value={sitio.name}>{sitio.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <input
-                type="number"
-                name="hectares"
-                placeholder="Farm Size (Hectares)"
-                value={farmerData.hectares}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                required
-              />
-              {farmerData.areaInSqm && (
-                <p className="text-sm text-gray-600 mt-1 ml-1">
-                  ≈ {farmerData.areaInSqm} square meters
-                </p>
-              )}
-            </div>
-            <select
-              name="landOwnership"
-              value={farmerData.landOwnership}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-xl bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-              required
-            >
-              <option value="">Select Land Ownership</option>
-              <option value="Owned">Owned</option>
-              <option value="Tenant">Tenant</option>
-              <option value="Lessee">Lessee</option>
-            </select>
-          </div>
-
-          {farmerData.coordinates && showMapPreview && (
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold text-green-800 mb-2">Map Preview (Verify Coordinates)</h3>
-              <MapContainer center={farmerData.coordinates} zoom={13} style={{ height: '300px', width: '100%' }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-                <Marker position={farmerData.coordinates}>
-                  <Popup>
-                    Farm Location: {farmerData.farmSitio}, {farmerData.farmBarangay}, Canlaon City <br />
-                    Coordinates: {farmerData.coordinates[0]}, {farmerData.coordinates[1]} <br />
-                    Land Ownership: {farmerData.landOwnership} <br />
-                    (Check if this matches the expected location.)
-                  </Popup>
-                </Marker>
-              </MapContainer>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-green-800 flex items-center">
-              <FaTractor className="mr-2" /> Crop Information
-            </h3>
-            <div className="space-y-4 border rounded-xl p-4 bg-green-50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <select
-                  name="name"
-                  value={newCrop.name}
-                  onChange={handleNewCropChange}
-                  className="w-full p-3 border rounded-xl bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                  disabled={loadingVegetables}
-                >
-                  <option value="">Select a Vegetable</option>
-                  {vegetables.map((vegetable) => (
-                    <option key={vegetable.id} value={vegetable.name}>{vegetable.name}</option>
-                  ))}
-                </select>
-
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
+          {/* Main Form Area */}
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 order-2 lg:order-1">
+            
+            {/* Section 1: Personal Information */}
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm transition-colors">
+              <div className="flex items-center gap-3 mb-8">
+                <FaUser className="text-slate-400 dark:text-slate-500 w-5 h-5" />
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Personal Information</h3>
               </div>
-              <div className="flex items-center border rounded-xl p-3 bg-white relative">
-                <FaCalendarAlt className="text-green-700 mx-2" />
-                <input
-                  type="date"
-                  name="plantingDate"
-                  value={newCrop.plantingDate}
-                  onChange={handleNewCropChange}
-                  className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-                  title="Select the date when you plan to plant the crop."
-                />
-              </div>
-              <button
-                type="button"
-                onClick={addCrop}
-                disabled={isAddingCrop}
-                className={`w-full bg-green-600 text-white p-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-md ${isAddingCrop ? "opacity-75 cursor-not-allowed" : "hover:bg-green-700"}`}
-              >
-                {isAddingCrop ? <><FaSpinner className="animate-spin mr-2" /> Adding...</> : <><FaPlus /> Add Crop</>}
-              </button>
-            </div>
-
-            {farmerData.mainCrops.length > 0 && (
-              <div className="space-y-2">
-                {farmerData.mainCrops.map((crop, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-green-100 rounded-xl shadow-sm">
-                    <div>
-                      <p className="text-sm font-semibold text-green-700">{crop.name}</p>
-                      <p className="text-xs text-gray-600">Planting Date: {crop.plantingDate}</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">First Name</label>
+                  <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800/50 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
+                    <input
+                      type="text"
+                      name="firstName"
+                      placeholder="Enter first name"
+                      value={farmerData.firstName}
+                      onChange={handleChange}
+                      className="w-full bg-transparent focus:outline-none text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Last Name</label>
+                  <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800/50 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
+                    <input
+                      type="text"
+                      name="lastName"
+                      placeholder="Enter last name"
+                      value={farmerData.lastName}
+                      onChange={handleChange}
+                      className="w-full bg-transparent focus:outline-none text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Age</label>
+                  <input
+                    type="text"
+                    name="age"
+                    placeholder="Enter age"
+                    value={farmerData.age}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sex</label>
+                  <div className="relative">
+                    <select
+                      name="sex"
+                      value={farmerData.sex}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10"
+                      required
+                    >
+                      <option value="">Select Sex</option>
+                      <option value="Male" className="bg-white dark:bg-slate-800">Male</option>
+                      <option value="Female" className="bg-white dark:bg-slate-800">Female</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                      <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
-                    <button type="button" onClick={() => removeCrop(index)} className="text-red-500 hover:text-red-700">
-                      <FaTimes />
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Contact Number</label>
+                  <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-800/50 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
+                    <FaPhone className="text-slate-300 dark:text-slate-600 mr-3 w-3 h-3" />
+                    <input
+                      type="text"
+                      name="contact"
+                      placeholder="09XXXXXXXXX"
+                      value={farmerData.contact}
+                      onChange={handleChange}
+                      maxLength="11"
+                      className="w-full bg-transparent focus:outline-none text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 2: Location Details */}
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm transition-colors">
+              <div className="flex items-center gap-3 mb-8">
+                <FaMapMarkerAlt className="text-slate-400 dark:text-slate-500 w-5 h-5" />
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Location Details</h3>
+              </div>
+              
+              <div className="space-y-8">
+                <div>
+                  <h4 className="text-[10px] font-extrabold text-slate-300 dark:text-slate-600 mb-4 uppercase tracking-[0.2em]">Home Address</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Barangay</label>
+                      <div className="relative">
+                        <select
+                          name="addressBarangay"
+                          value={farmerData.addressBarangay}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10"
+                          required
+                        >
+                          <option value="" className="bg-white dark:bg-slate-800">Select Barangay</option>
+                          {Object.keys(canlaonLocations).map((barangay) => (
+                            <option key={barangay} value={barangay} className="bg-white dark:bg-slate-800">{barangay}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                          <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sitio/Purok</label>
+                      <div className="relative">
+                        <select
+                          name="addressSitio"
+                          value={farmerData.addressSitio}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10 disabled:opacity-50"
+                          required
+                          disabled={!selectedAddressBarangay}
+                        >
+                          <option value="" className="bg-white dark:bg-slate-800">Select Sitio</option>
+                          {selectedAddressBarangay && canlaonLocations[selectedAddressBarangay].sitios.map((sitio) => (
+                            <option key={sitio.name} value={sitio.name} className="bg-white dark:bg-slate-800">{sitio.name}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                          <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                  <h4 className="text-[10px] font-extrabold text-slate-300 dark:text-slate-600 mb-4 uppercase tracking-[0.2em]">Farm Location</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Barangay</label>
+                      <div className="relative">
+                        <select
+                          name="farmBarangay"
+                          value={farmerData.farmBarangay}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10"
+                          required
+                        >
+                          <option value="" className="bg-white dark:bg-slate-800">Select Barangay</option>
+                          {Object.keys(canlaonLocations).map((barangay) => (
+                            <option key={barangay} value={barangay} className="bg-white dark:bg-slate-800">{barangay}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                          <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sitio/Purok</label>
+                      <div className="relative">
+                        <select
+                          name="farmSitio"
+                          value={farmerData.farmSitio}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10 disabled:opacity-50"
+                          required
+                          disabled={!selectedFarmBarangay}
+                        >
+                          <option value="" className="bg-white dark:bg-slate-800">Select Sitio</option>
+                          {selectedFarmBarangay && canlaonLocations[selectedFarmBarangay].sitios.map((sitio) => (
+                            <option key={sitio.name} value={sitio.name} className="bg-white dark:bg-slate-800">{sitio.name}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                          <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 3: Farm Information */}
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm transition-colors">
+              <div className="flex items-center gap-3 mb-8">
+                <FaTractor className="text-slate-400 dark:text-slate-500 w-5 h-5" />
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Farm Details</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Farm Size (Hectares)</label>
+                  <input
+                    type="number"
+                    name="hectares"
+                    placeholder="0.00"
+                    value={farmerData.hectares}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                    required
+                  />
+                  {farmerData.areaInSqm && (
+                    <p className="text-[9px] text-green-600/70 dark:text-green-500/70 mt-1.5 ml-1 uppercase tracking-widest font-black">
+                      {farmerData.areaInSqm} SQM Area
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Ownership Type</label>
+                  <div className="relative">
+                    <select
+                      name="landOwnership"
+                      value={farmerData.landOwnership}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10"
+                      required
+                    >
+                      <option value="" className="bg-white dark:bg-slate-800">Select Ownership</option>
+                      <option value="Owned" className="bg-white dark:bg-slate-800">Owned</option>
+                      <option value="Tenant" className="bg-white dark:bg-slate-800">Tenant</option>
+                      <option value="Lessee" className="bg-white dark:bg-slate-800">Lessee</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                      <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {farmerData.coordinates && showMapPreview && (
+                <div className="mt-8 border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 p-1">
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Location Verify</span>
+                    <button type="button" onClick={() => setShowMapPreview(false)} className="text-slate-300 hover:text-red-400 transition-colors">
+                      <FaTimes className="w-2.5 h-2.5" />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <MapContainer center={farmerData.coordinates} zoom={13} style={{ height: '260px', width: '100%', borderRadius: '12px' }}>
+                    <TileLayer 
+                      url={darkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"} 
+                      attribution="&copy; OpenStreetMap contributors" 
+                    />
+                    <Marker position={farmerData.coordinates}>
+                      <Popup>
+                        <div className="p-1 text-xs">
+                          <p className="font-bold text-slate-800">{farmerData.farmSitio}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </MapContainer>
+                </div>
+              )}
+            </section>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full bg-green-600 text-white p-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-md ${isSubmitting ? "opacity-75 cursor-not-allowed" : "hover:bg-green-700"}`}
-          >
-            {isSubmitting ? <><FaSpinner className="animate-spin mr-2" /> Registering...</> : "Register Farmer"}
-          </button>
-        </form>
+            {/* Section 4: Crop Information */}
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm transition-colors">
+              <div className="flex items-center gap-3 mb-8">
+                <FaPlus className="text-slate-400 dark:text-slate-500 w-5 h-5" />
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Crop Inventory</h3>
+              </div>
+              
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Commodity</label>
+                    <div className="relative">
+                      <select
+                        name="name"
+                        value={newCrop.name}
+                        onChange={handleNewCropChange}
+                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium appearance-none pr-10"
+                        disabled={loadingVegetables}
+                      >
+                        <option value="">Select Vegetable</option>
+                        {vegetables.map((vegetable) => (
+                          <option key={vegetable.id} value={vegetable.name}>{vegetable.name}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                        <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Planting Date</label>
+                    <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
+                      <FaCalendarAlt className="text-slate-200 dark:text-slate-600 mr-3 w-3 h-3" />
+                      <input
+                        type="date"
+                        name="plantingDate"
+                        value={newCrop.plantingDate}
+                        onChange={handleNewCropChange}
+                        className="w-full bg-transparent focus:outline-none text-sm text-slate-700 dark:text-slate-200 font-medium"
+                      />
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={addCrop}
+                    disabled={isAddingCrop}
+                    className="md:col-span-2 w-full bg-slate-800 text-white py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-900 transition-all font-bold active:scale-[0.98] text-sm"
+                  >
+                    {isAddingCrop ? <FaSpinner className="animate-spin" /> : <FaPlus className="w-2.5 h-2.5" />} Add Crop
+                  </button>
+                </div>
+
+                {farmerData.mainCrops.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+                    {farmerData.mainCrops.map((crop, index) => (
+                      <div key={index} className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm hover:border-green-100 dark:hover:border-green-900 transition-all group">
+                        <div className="flex items-center gap-3">
+                          <FaCheckCircle className="w-3.5 h-3.5 text-green-500/50 group-hover:text-green-500 transition-colors" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-700 dark:text-gray-200">{crop.name}</p>
+                            <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">{crop.plantingDate}</p>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => removeCrop(index)} className="p-1.5 text-slate-200 hover:text-red-400 transition-all">
+                          <FaTimes className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <div className="pt-6">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-green-600 text-white py-5 rounded-3xl flex items-center justify-center gap-3 hover:bg-green-700 transition-all shadow-xl shadow-green-100 font-bold text-xl active:scale-[0.99]"
+              >
+                {isSubmitting ? <FaSpinner className="animate-spin" /> : <FaCheckCircle />} Complete Registration
+              </button>
+            </div>
+          </form>
+
+          {/* Guidelines Sidebar */}
+          <aside className="lg:w-80 space-y-6 order-1 lg:order-2 lg:sticky lg:top-8 h-fit">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm transition-colors">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-8 flex items-center gap-2 uppercase tracking-[0.2em]">
+                Guide
+              </h3>
+              
+              <div className="space-y-10">
+                <div className="flex gap-4">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex-shrink-0 flex items-center justify-center font-bold text-[10px]">1</div>
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">Identity</h4>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Verified names and contact info only.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex-shrink-0 flex items-center justify-center font-bold text-[10px]">2</div>
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">Geography</h4>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Select correct barangay and sitio for mapping.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex-shrink-0 flex items-center justify-center font-bold text-[10px]">3</div>
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">Metrics</h4>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Land size in hectares for automated calculations.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex-shrink-0 flex items-center justify-center font-bold text-[10px]">4</div>
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">Inventory</h4>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Add commodity and date for forecasts.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 transition-colors">
+              <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">Assistance</h4>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed mb-4 font-medium">Contact City Agriculture for technical support.</p>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl transition-colors">
+                <FaPhone className="w-2.5 h-2.5 text-slate-300 dark:text-slate-600" />
+                <span>(035) 123-4567</span>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

@@ -3,8 +3,39 @@ import axios from 'axios';
 import ReactApexChart from 'react-apexcharts';
 import Loading from '../../components/Loading';
 import API_BASE_URL from '../../config';
+import { useTheme } from '../../context/ThemeContext';
+
+// Utility functions for commodity normalization
+const getBaseCommodityName = (name) => {
+  if (!name) return "";
+  let base = name.replace(/\s*\(Per\s+(Kg\.|Sack|Piece|Bundle)\)\s*/gi, '').trim();
+  // Normalize known duplicates/typos
+  if (base.toLowerCase() === 'cauli-flower') return 'Cauliflower';
+  return base;
+};
+
+const formatCommodityName = (name) => {
+  if (!name) return "";
+  const base = getBaseCommodityName(name);
+  const match = name.match(/\(Per\s+(Kg\.|Sack|Piece|Bundle)\)/i);
+  const suffix = match ? match[0] : '(Per Kg.)';
+  return `${base} ${suffix}`;
+};
+
+const deduplicateCommodities = (commodityList) => {
+  if (!commodityList) return [];
+  const seen = new Map();
+  commodityList.forEach(name => {
+    const base = getBaseCommodityName(name);
+    if (!seen.has(base.toLowerCase())) {
+      seen.set(base.toLowerCase(), name);
+    }
+  });
+  return [...seen.values()];
+};
 
 const Dashboard = () => {
+  const { darkMode } = useTheme();
   // Core state
   const [dashboardData, setDashboardData] = useState(null);
   const [selectedCommodity, setSelectedCommodity] = useState('');
@@ -33,14 +64,18 @@ const Dashboard = () => {
   // Notification state
   const [notifications, setNotifications] = useState([]);
 
-  // NEW: Overview filters
+  // Overview filters
   const [overviewYearFilter, setOverviewYearFilter] = useState('all');
   const [overviewCommodityFilter, setOverviewCommodityFilter] = useState('all');
-  const [overviewDataView, setOverviewDataView] = useState('volume'); // 'volume' or 'price'
+  const [overviewDataView, setOverviewDataView] = useState('volume');
   const [chartYearFilter, setChartYearFilter] = useState('all');
   const [comparisonYearFilter, setComparisonYearFilter] = useState('all');
+  const [overviewMonthFilter, setOverviewMonthFilter] = useState('all');
+  const [overviewWeekFilter, setOverviewWeekFilter] = useState('all');
+  const [overviewSearchQuery, setOverviewSearchQuery] = useState('');
+  const [overviewSortConfig, setOverviewSortConfig] = useState({ key: 'date', direction: 'desc' });
 
-  // NEW: Training State
+  // Training State
   const [isTraining, setIsTraining] = useState(false);
   const [trainingLogs, setTrainingLogs] = useState([]);
   const logsEndRef = React.useRef(null);
@@ -96,8 +131,9 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (dashboardData && dashboardData.commodities.length > 0) {
-      setChartCommodity(dashboardData.commodities[0]);
-      setSelectedCommodity(dashboardData.commodities[0]);
+      const uniqueCmds = deduplicateCommodities(dashboardData.commodities);
+      setChartCommodity(uniqueCmds[0]);
+      setSelectedCommodity(uniqueCmds[0]);
     }
   }, [dashboardData]);
 
@@ -105,16 +141,20 @@ const Dashboard = () => {
     if (forecastMode === 'weekly') {
       setPeriodsAhead(4);
     } else if (forecastMode === 'monthly') {
-      setPeriodsAhead(4); // Default to 4 weeks
+      setPeriodsAhead(4);
     } else if (forecastMode === 'yearly') {
-      setPeriodsAhead(12); // Default to max 12 weeks
+      setPeriodsAhead(12);
     }
   }, [forecastMode]);
 
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/dashboard`);
-      setDashboardData(response.data);
+      const uniqueCmds = deduplicateCommodities(response.data.commodities);
+      setDashboardData({
+        ...response.data,
+        uniqueCommodities: uniqueCmds
+      });
     } catch (err) {
       setError(err.message);
       console.error('Error fetching dashboard data:', err);
@@ -132,7 +172,7 @@ const Dashboard = () => {
   };
 
   // ============================================================================
-  // NEW: DATA ANALYSIS FUNCTIONS FOR OVERVIEW
+  // DATA ANALYSIS FUNCTIONS FOR OVERVIEW
   // ============================================================================
 
   const analyzeVolumeData = useMemo(() => {
@@ -140,18 +180,30 @@ const Dashboard = () => {
 
     let filteredData = dashboardData.volume_data;
 
-    // Apply filters
     if (overviewYearFilter !== 'all') {
       filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
     }
+    if (overviewMonthFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.month === parseInt(overviewMonthFilter));
+    }
+    if (overviewWeekFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.week === parseInt(overviewWeekFilter));
+    }
     if (overviewCommodityFilter !== 'all') {
-      filteredData = filteredData.filter(item => item.commodity === overviewCommodityFilter);
+      const baseFilter = getBaseCommodityName(overviewCommodityFilter);
+      filteredData = filteredData.filter(item => getBaseCommodityName(item.commodity) === baseFilter);
     }
 
-    // Group by year-month-week-commodity
     const grouped = {};
     filteredData.forEach(item => {
       const key = `${item.year}-${item.month}-${item.week}`;
+      const baseName = getBaseCommodityName(item.commodity);
+      
+      // Search matching for commodities within the week
+      if (overviewSearchQuery && !baseName.toLowerCase().includes(overviewSearchQuery.toLowerCase())) {
+        return;
+      }
+
       if (!grouped[key]) {
         grouped[key] = {
           year: item.year,
@@ -159,23 +211,31 @@ const Dashboard = () => {
           week: item.week,
           week_label: item.week_label,
           commodities: {},
-          totalVolume: 0
+          totalVolume: 0,
+          dateValue: new Date(item.year, item.month - 1, item.week * 7).getTime()
         };
       }
-      grouped[key].commodities[item.commodity] = item.volume;
+      if (!grouped[key].commodities[baseName]) {
+        grouped[key].commodities[baseName] = 0;
+      }
+      grouped[key].commodities[baseName] += item.volume;
       grouped[key].totalVolume += item.volume;
     });
 
-    // Convert to array and sort
-    const result = Object.values(grouped).sort((a, b) => {
-      if (a.year !== b.year) return b.year - a.year;
-      if (a.month !== b.month) return b.month - a.month;
-      return b.week - a.week;
+    let result = Object.values(grouped);
+
+    // Sorting
+    result.sort((a, b) => {
+      const { key, direction } = overviewSortConfig;
+      let comparison = 0;
+      if (key === 'date') comparison = a.dateValue - b.dateValue;
+      else if (key === 'volume') comparison = a.totalVolume - b.totalVolume;
+      else if (key === 'month') comparison = a.month - b.month;
+      return direction === 'asc' ? comparison : -comparison;
     });
 
-    // Calculate completeness
     const expectedCommodities = overviewCommodityFilter === 'all'
-      ? dashboardData.commodities.length
+      ? dashboardData.uniqueCommodities.length
       : 1;
 
     result.forEach(item => {
@@ -185,51 +245,81 @@ const Dashboard = () => {
     });
 
     return result;
-  }, [dashboardData, overviewYearFilter, overviewCommodityFilter]);
+  }, [dashboardData, overviewYearFilter, overviewMonthFilter, overviewWeekFilter, overviewCommodityFilter, overviewSearchQuery, overviewSortConfig]);
 
   const analyzePriceData = useMemo(() => {
     if (!dashboardData) return null;
 
     let filteredData = dashboardData.price_data;
 
-    // Apply filters
     if (overviewYearFilter !== 'all') {
       filteredData = filteredData.filter(item => item.year === parseInt(overviewYearFilter));
     }
+    if (overviewMonthFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.month === parseInt(overviewMonthFilter));
+    }
+    if (overviewWeekFilter !== 'all') {
+      filteredData = filteredData.filter(item => item.week === parseInt(overviewWeekFilter));
+    }
     if (overviewCommodityFilter !== 'all') {
-      filteredData = filteredData.filter(item => item.commodity === overviewCommodityFilter);
+      const baseFilter = getBaseCommodityName(overviewCommodityFilter);
+      filteredData = filteredData.filter(item => getBaseCommodityName(item.commodity) === baseFilter);
     }
 
-    // Group by year-month-week-commodity
     const grouped = {};
     filteredData.forEach(item => {
       const key = `${item.year}-${item.month}-${item.week}`;
+      const baseName = getBaseCommodityName(item.commodity);
+
+      // Search matching
+      if (overviewSearchQuery && !baseName.toLowerCase().includes(overviewSearchQuery.toLowerCase())) {
+        return;
+      }
+
       if (!grouped[key]) {
         grouped[key] = {
           year: item.year,
           month: item.month,
           week: item.week,
           week_label: item.week_label,
-          commodities: {}
+          commodities: {},
+          dateValue: new Date(item.year, item.month - 1, item.week * 7).getTime()
         };
       }
-      grouped[key].commodities[item.commodity] = {
-        lowest: item.lowest_price,
-        highest: item.highest_price,
-        average: item.average_price
-      };
+      if (!grouped[key].commodities[baseName]) {
+        grouped[key].commodities[baseName] = {
+          lowest: item.lowest_price,
+          highest: item.highest_price,
+          average: item.average_price,
+          count: 1
+        };
+      } else {
+        const existing = grouped[key].commodities[baseName];
+        existing.lowest = Math.min(existing.lowest, item.lowest_price);
+        existing.highest = Math.max(existing.highest, item.highest_price);
+        existing.average = ((existing.average * existing.count) + item.average_price) / (existing.count + 1);
+        existing.count += 1;
+      }
     });
 
-    // Convert to array and sort
-    const result = Object.values(grouped).sort((a, b) => {
-      if (a.year !== b.year) return b.year - a.year;
-      if (a.month !== b.month) return b.month - a.month;
-      return b.week - a.week;
+    let result = Object.values(grouped);
+
+    // Sorting
+    result.sort((a, b) => {
+      const { key, direction } = overviewSortConfig;
+      let comparison = 0;
+      if (key === 'date') comparison = a.dateValue - b.dateValue;
+      else if (key === 'month') comparison = a.month - b.month;
+      else if (key === 'volume') {
+        const avgA = Object.values(a.commodities).reduce((sum, p) => sum + p.average, 0) / (Object.keys(a.commodities).length || 1);
+        const avgB = Object.values(b.commodities).reduce((sum, p) => sum + p.average, 0) / (Object.keys(b.commodities).length || 1);
+        comparison = avgA - avgB;
+      }
+      return direction === 'asc' ? comparison : -comparison;
     });
 
-    // Calculate completeness and averages
     const expectedCommodities = overviewCommodityFilter === 'all'
-      ? dashboardData.commodities.length
+      ? dashboardData.uniqueCommodities.length
       : 1;
 
     result.forEach(item => {
@@ -237,7 +327,6 @@ const Dashboard = () => {
       item.completeness = (actualCommodities / expectedCommodities) * 100;
       item.missingCommodities = expectedCommodities - actualCommodities;
 
-      // Calculate overall averages for the week
       const prices = Object.values(item.commodities);
       if (prices.length > 0) {
         item.weekLowest = Math.min(...prices.map(p => p.lowest));
@@ -247,10 +336,40 @@ const Dashboard = () => {
     });
 
     return result;
-  }, [dashboardData, overviewYearFilter, overviewCommodityFilter]);
+  }, [dashboardData, overviewYearFilter, overviewMonthFilter, overviewWeekFilter, overviewCommodityFilter, overviewSearchQuery, overviewSortConfig]);
+
+  const sentimentData = useMemo(() => {
+    if (!dashboardData || !chartCommodity) return { score: 0, label: 'No Data' };
+    
+    const commodityPrices = dashboardData.price_data.filter(
+      item => getBaseCommodityName(item.commodity) === chartCommodity
+    );
+    
+    if (commodityPrices.length < 2) return { score: 50, label: 'Stable' };
+    
+    const sortedPrices = [...commodityPrices].sort((a, b) => 
+      new Date(a.year, a.month-1, a.week*7) - new Date(b.year, b.month-1, b.week*7)
+    );
+    
+    const latest = sortedPrices[sortedPrices.length - 1].average_price;
+    const previous = sortedPrices[sortedPrices.length - 2].average_price;
+    const change = previous !== 0 ? ((latest - previous) / previous) * 100 : 0;
+    
+    // Simple logic: Increasing price = potentially higher demand/better sentiment
+    let score = 50 + (change * 2); 
+    score = Math.max(0, Math.min(100, score));
+    
+    let label = 'Neutral';
+    if (score > 75) label = 'Bullish / High Demand';
+    else if (score < 25) label = 'Bearish / Oversupply';
+    else if (score > 55) label = 'Positive';
+    else if (score < 45) label = 'Weakening';
+    
+    return { score, label };
+  }, [dashboardData, chartCommodity]);
 
   // ============================================================================
-  // FORECAST HANDLING
+  // FORECAST HANDLING — FIXED
   // ============================================================================
 
   const handleForecast = async () => {
@@ -259,16 +378,24 @@ const Dashboard = () => {
       return;
     }
 
+    // FIX 1: Guard against NaN periodsAhead
+    const safePeriodsAhead = isNaN(periodsAhead) || periodsAhead < 1 ? 4 : periodsAhead;
+
     setLoading(true);
     setError(null);
     addNotification('Generating forecast...', 'info');
 
     try {
+      // FIX 2: Include forecast_mode in request body
+      // FIX 3: Send full commodity name (with unit suffix) so backend can match it
       const requestBody = {
-        commodity: selectedCommodity,
+        commodity: formatCommodityName(selectedCommodity),
         data_type: selectedDataType,
-        weeks_ahead: periodsAhead
+        forecast_mode: forecastMode,
+        weeks_ahead: safePeriodsAhead
       };
+
+      console.log('Forecast request payload:', requestBody); // helpful for debugging
 
       const response = await axios.post(`${API_BASE_URL}/api/forecast`, requestBody);
       setForecastResult(response.data);
@@ -278,6 +405,7 @@ const Dashboard = () => {
       const errorMsg = err.response?.data?.detail || err.message;
       setError(errorMsg);
       addNotification(`Error: ${errorMsg}`, 'error');
+      console.error('Forecast error response:', err.response?.data);
     } finally {
       setLoading(false);
     }
@@ -292,14 +420,11 @@ const Dashboard = () => {
 
     setIsTraining(true);
     setTrainingLogs(['Starting training process...', 'Connecting to server...']);
-    setActiveTab('training'); // Switch to training tab
+    setActiveTab('training');
 
     try {
-      // 1. Trigger Training Background Task
       await axios.post(`${API_BASE_URL}/api/start_training`);
 
-      // 2. Connect WebSocket for logs
-      // Note: In production, use wss:// for secure connection
       const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/training';
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -317,7 +442,7 @@ const Dashboard = () => {
           if (!data.is_training) {
             ws.close();
             addNotification('Training Completed!', 'success');
-            fetchModelInfo(); // Refresh model info
+            fetchModelInfo();
           }
         }
       };
@@ -364,7 +489,6 @@ const Dashboard = () => {
       addNotification(`✅ Valid Dataset: ${rows} rows, ${commodities} commodities`, 'success');
       alert(`Dataset Validated Successfully!\n\nDetails:\n- Rows: ${rows}\n- Commodities: ${commodities}\n- Columns: ${columns.join(', ')}\n\nStarting training now...`);
 
-      // Auto-start training after upload
       setTimeout(() => startTraining(), 1000);
 
     } catch (err) {
@@ -373,10 +497,9 @@ const Dashboard = () => {
       addNotification(`❌ Error: ${errorDetail}`, 'error');
       alert(`Dataset Validation Failed ❌\n\nReason: ${errorDetail}`);
       setUploadProgress(0);
-      setUploadFile(null); // Reset file if invalid
+      setUploadFile(null);
     }
   };
-
 
   // ============================================================================
   // FILE UPLOAD HANDLING
@@ -494,7 +617,7 @@ CONFIG = {
       totalWeeks: dashboardData.volume_data.length + dashboardData.price_data.length,
       totalVolume: volumeTotal.toFixed(2),
       avgPrice: priceAvg.toFixed(2),
-      commoditiesCount: dashboardData.commodities.length
+      commoditiesCount: dashboardData.uniqueCommodities.length
     };
   };
 
@@ -539,13 +662,13 @@ CONFIG = {
       const weekNumber = startWeek + index;
 
       const volItem = dashboardData.volume_data.find(
-        item => item.commodity === chartCommodity &&
+        item => getBaseCommodityName(item.commodity) === chartCommodity &&
           item.week === weekNumber &&
           (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
       );
 
       const priceItem = dashboardData.price_data.find(
-        item => item.commodity === chartCommodity &&
+        item => getBaseCommodityName(item.commodity) === chartCommodity &&
           item.week === weekNumber &&
           (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
       );
@@ -555,7 +678,6 @@ CONFIG = {
 
       const item = volItem || priceItem;
       if (item && item.month && item.year) {
-        // Multi-line label for Axis
         categories.push([`Week ${weekNumber}`, `${monthNames[item.month - 1]} ${item.year}`]);
       } else {
         categories.push(`Week ${weekNumber}`);
@@ -624,14 +746,14 @@ CONFIG = {
 
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
-            item => item.commodity === commodity &&
+            item => getBaseCommodityName(item.commodity) === commodity &&
               item.week === weekNumber &&
               (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.volume : 0;
         } else {
           const dataPoint = dashboardData.price_data.find(
-            item => item.commodity === commodity &&
+            item => getBaseCommodityName(item.commodity) === commodity &&
               item.week === weekNumber &&
               (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
@@ -639,10 +761,7 @@ CONFIG = {
         }
       });
 
-      return {
-        name: commodity,
-        data: weeklyData
-      };
+      return { name: commodity, data: weeklyData };
     });
 
     return {
@@ -732,14 +851,14 @@ CONFIG = {
 
         if (comparisonDataType === 'volume') {
           const dataPoint = dashboardData.volume_data.find(
-            item => item.commodity === commodity &&
+            item => getBaseCommodityName(item.commodity) === commodity &&
               item.week === weekNumber &&
               (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
           return dataPoint ? dataPoint.volume : null;
         } else {
           const dataPoint = dashboardData.price_data.find(
-            item => item.commodity === commodity &&
+            item => getBaseCommodityName(item.commodity) === commodity &&
               item.week === weekNumber &&
               (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
           );
@@ -747,10 +866,7 @@ CONFIG = {
         }
       });
 
-      return {
-        name: commodity,
-        data: weeklyData
-      };
+      return { name: commodity, data: weeklyData };
     });
 
     return {
@@ -814,7 +930,7 @@ CONFIG = {
     const volumeData = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.volume_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.volume : 0;
     });
@@ -822,7 +938,7 @@ CONFIG = {
     const priceData = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.average_price : 0;
     });
@@ -909,7 +1025,7 @@ CONFIG = {
     const lowestPrices = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.lowest_price : 0;
     });
@@ -917,7 +1033,7 @@ CONFIG = {
     const priceRanges = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => item.commodity === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
       );
       return dataPoint ? (dataPoint.highest_price - dataPoint.lowest_price) : 0;
     });
@@ -1036,13 +1152,12 @@ CONFIG = {
 
   if (!dashboardData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+      <div className={`min-h-screen ${darkMode ? "bg-slate-950" : "bg-gradient-to-br from-green-50 to-blue-50"} flex items-center justify-center transition-colors duration-300`}>
         <Loading fullScreen={false} text="Loading dashboard data..." />
       </div>
     );
   }
 
-  // Get available years for filter
   const availableYears = [...new Set([
     ...dashboardData.volume_data.map(d => d.year),
     ...dashboardData.price_data.map(d => d.year)
@@ -1053,16 +1168,17 @@ CONFIG = {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+    <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-slate-100" : "bg-gray-50 text-slate-800"} px-6 pt-2 pb-8 w-full font-sans transition-colors duration-300`}>
       {/* Notification Center */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      <div className="fixed top-4 right-4 z-[100] space-y-2">
         {notifications.map(notif => (
           <div
             key={notif.id}
-            className={`px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in ${notif.type === 'success' ? 'bg-green-500 text-white' :
-              notif.type === 'error' ? 'bg-red-500 text-white' :
-                'bg-blue-500 text-white'
-              }`}
+            className={`px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-300 ${
+              notif.type === 'success' ? (darkMode ? 'bg-emerald-600 text-white' : 'bg-green-600 text-white') :
+              notif.type === 'error' ? (darkMode ? 'bg-rose-600 text-white' : 'bg-red-600 text-white') :
+              (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
+            }`}
           >
             <span className="text-xl">
               {notif.type === 'success' ? '✅' : notif.type === 'error' ? '❌' : 'ℹ️'}
@@ -1073,105 +1189,69 @@ CONFIG = {
       </div>
 
       {/* Header */}
-      <header className="bg-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">🌾 AgriData Analytics Dashboard</h1>
-              <p className="text-sm text-gray-600 mt-1">Multi-Period Agricultural Forecasting & Analysis</p>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* <button
-                onClick={() => setShowModelManager(!showModelManager)}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
-              >
-                <span>🤖</span>
-                <span>Model Manager</span>
-                {modelInfo && (
-                  <span className="bg-purple-800 px-2 py-0.5 rounded-full text-xs">
-                    {modelInfo.total_models}
-                  </span>
-                )}
-              </button> */}
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Last Updated</p>
-                <p className="text-lg font-semibold text-gray-700">January 21, 2026</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <h1 className={`text-3xl font-bold ${darkMode ? "text-slate-100" : "text-slate-800"} mb-2`}>AgriData Analytics Dashboard</h1>
+      <p className={`text-sm ${darkMode ? "text-slate-400" : "text-slate-500"} mb-8`}>Multi-Period Agricultural Forecasting & Analysis</p>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="w-full">
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-8">
+          <div className={`${darkMode ? "bg-slate-900 border-blue-500/50" : "bg-white border-blue-500"} rounded-lg shadow-md p-6 border-l-4 transition-colors`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Entries</p>
-                <p className="text-3xl font-bold text-gray-900">{stats?.totalWeeks || 0}</p>
+                <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Total Entries</p>
+                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>{stats?.totalWeeks || 0}</p>
               </div>
-              <div className="text-4xl">📊</div>
+              <div className="text-4xl opacity-80">📊</div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+          <div className={`${darkMode ? "bg-slate-900 border-green-500/50" : "bg-white border-green-500"} rounded-lg shadow-md p-6 border-l-4 transition-colors`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Volume</p>
-                <p className="text-3xl font-bold text-gray-900">{stats?.totalVolume || 0}</p>
+                <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Total Volume</p>
+                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>{stats?.totalVolume || 0}</p>
               </div>
-              <div className="text-4xl">📦</div>
+              <div className="text-4xl opacity-80">📦</div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+          <div className={`${darkMode ? "bg-slate-900 border-yellow-500/50" : "bg-white border-yellow-500"} rounded-lg shadow-md p-6 border-l-4 transition-colors`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Avg Price</p>
-                <p className="text-3xl font-bold text-gray-900">₱{stats?.avgPrice || 0}</p>
+                <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Avg Price</p>
+                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>₱{stats?.avgPrice || 0}</p>
               </div>
-              <div className="text-4xl">💰</div>
+              <div className="text-4xl opacity-80">💰</div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+          <div className={`${darkMode ? "bg-slate-900 border-purple-500/50" : "bg-white border-purple-500"} rounded-lg shadow-md p-6 border-l-4 transition-colors`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Commodities</p>
-                <p className="text-3xl font-bold text-gray-900">{stats?.commoditiesCount || 0}</p>
+                <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Commodities</p>
+                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>{stats?.commoditiesCount || 0}</p>
               </div>
-              <div className="text-4xl">🥬</div>
+              <div className="text-4xl opacity-80">🥬</div>
             </div>
           </div>
-
-          {/* <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">AI Models</p>
-                <p className="text-3xl font-bold text-gray-900">{modelInfo?.total_models || 0}</p>
-              </div>
-              <div className="text-4xl">🤖</div>
-            </div>
-          </div> */}
         </div>
 
         {/* Forecast Controls */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className={`${darkMode ? "bg-slate-900 border border-slate-800" : "bg-white"} rounded-lg shadow-md p-6 mb-8 transition-colors`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">🔮 Advanced Forecast Controls</h2>
+            <h2 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>🔮 Advanced Forecast Controls</h2>
             {selectedCommodity && (
               <div className="text-sm">
                 {modelInfo?.models?.find(m =>
-                  m.commodity.toLowerCase() === selectedCommodity.toLowerCase() &&
-                  m.data_type === selectedDataType
+                  m.model_key === `global_${selectedDataType}` ||
+                  (m.commodity.toLowerCase() === selectedCommodity.toLowerCase() && m.data_type === selectedDataType)
                 ) ? (
-                  <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full font-semibold">
+                  <span className={`px-3 py-1 ${darkMode ? "bg-green-900/30 text-green-400 border border-green-800/30" : "bg-green-100 text-green-800"} rounded-full font-semibold`}>
                     ⚡ Using Pre-trained Model
                   </span>
                 ) : (
-                  <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">
+                  <span className={`px-3 py-1 ${darkMode ? "bg-yellow-900/30 text-yellow-500 border border-yellow-800/30" : "bg-yellow-100 text-yellow-800"} rounded-full font-semibold`}>
                     🔨 Will Train from Database
                   </span>
                 )}
@@ -1182,54 +1262,57 @@ CONFIG = {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Commodity</label>
+                <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Commodity</label>
                 <select
                   value={selectedCommodity}
                   onChange={(e) => setSelectedCommodity(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-green-500/50" : "bg-white border-gray-300 focus:ring-green-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                 >
-                  {dashboardData.commodities.map(commodity => (
-                    <option key={commodity} value={commodity}>{commodity} (Per Kg.)</option>
+                  {dashboardData.uniqueCommodities.map(commodity => (
+                    <option key={commodity} value={commodity} className={darkMode ? "bg-slate-800" : "bg-white"}>{formatCommodityName(commodity)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
+                <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Data Type</label>
                 <select
                   value={selectedDataType}
                   onChange={(e) => setSelectedDataType(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-green-500/50" : "bg-white border-gray-300 focus:ring-green-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                 >
-                  <option value="volume">Volume (Kg)</option>
-                  <option value="price">Price (₱)</option>
+                  <option value="volume" className={darkMode ? "bg-slate-800" : "bg-white"}>Volume (Kg)</option>
+                  <option value="price" className={darkMode ? "bg-slate-800" : "bg-white"}>Price (₱)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Forecast Mode</label>
+                <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Forecast Mode</label>
                 <select
                   value={forecastMode}
                   onChange={(e) => setForecastMode(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-green-500/50" : "bg-white border-gray-300 focus:ring-green-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                 >
-                  <option value="weekly">📅 Weekly</option>
-                  <option value="monthly">📆 Monthly</option>
-                  <option value="yearly">🗓️ Yearly</option>
+                  <option value="weekly" className={darkMode ? "bg-slate-800" : "bg-white"}>📅 Weekly</option>
+                  <option value="monthly" className={darkMode ? "bg-slate-800" : "bg-white"}>📆 Monthly</option>
+                  <option value="yearly" className={darkMode ? "bg-slate-800" : "bg-white"}>🗓️ Yearly</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>
                   Forecast Duration (Weeks Ahead)
                 </label>
                 <input
                   type="number"
                   value={periodsAhead}
-                  onChange={(e) => setPeriodsAhead(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setPeriodsAhead(isNaN(val) ? 4 : Math.min(Math.max(val, 1), 12));
+                  }}
                   min="1"
                   max="12"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-green-500/50" : "bg-white border-gray-300 focus:ring-green-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                 />
               </div>
 
@@ -1237,7 +1320,7 @@ CONFIG = {
                 <button
                   onClick={handleForecast}
                   disabled={loading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors disabled:bg-gray-400"
+                  className={`w-full ${darkMode ? "bg-green-600 hover:bg-green-500 disabled:bg-slate-800" : "bg-green-600 hover:bg-green-700 disabled:bg-gray-400"} text-white font-semibold py-2 px-6 rounded-lg transition-all active:scale-[0.98]`}
                 >
                   {loading ? 'Forecasting...' : 'Generate'}
                 </button>
@@ -1245,215 +1328,278 @@ CONFIG = {
             </div>
 
             {error && (
-              <div className="mt-4 bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                <p className="text-red-700">{error}</p>
+              <div className={`mt-4 ${darkMode ? "bg-rose-900/10 border-rose-800/50" : "bg-red-50 border-red-500"} border-l-4 p-4 rounded`}>
+                <p className={darkMode ? "text-rose-400" : "text-red-700"}>{error}</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-md mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                📊 Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('commodity')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'commodity'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                📈 Commodity Charts
-              </button>
-              <button
-                onClick={() => setActiveTab('comparison')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'comparison'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                📊 Multi-Commodity Comparison
-              </button>
-              <button
-                onClick={() => setActiveTab('forecast')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'forecast'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                🔮 Forecast Results
-              </button>
-              <button
-                onClick={() => setActiveTab('training')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'training'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                🏋️ Training & Models
-              </button>
+        <div className={`${darkMode ? "bg-slate-900 border border-slate-800" : "bg-white"} rounded-lg shadow-md mb-8 transition-colors`}>
+          <div className={`border-b ${darkMode ? "border-slate-800" : "border-gray-200"}`}>
+            <nav className="flex space-x-8 px-6 overflow-x-auto">
+              {[
+                { key: 'overview', label: '📊 Overview' },
+                { key: 'commodity', label: '📈 Commodity Charts' },
+                { key: 'comparison', label: '📊 Multi-Commodity Comparison' },
+                { key: 'forecast', label: '🔮 Forecast Results' },
+                { key: 'training', label: '🏋️ Training & Models' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`py-4 px-1 border-b-2 font-bold text-sm whitespace-nowrap transition-all ${activeTab === tab.key
+                    ? tab.key === 'training'
+                      ? 'border-purple-500 text-purple-500'
+                      : 'border-green-500 text-green-500'
+                    : `border-transparent ${darkMode ? "text-slate-500 hover:text-slate-300" : "text-gray-500 hover:text-gray-700"}`
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </nav>
           </div>
 
           <div className="p-6">
-            {/* ENHANCED OVERVIEW TAB */}
+            {/* OVERVIEW TAB */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                {/* Filters */}
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">📋 Data Filters & View Options</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`${darkMode ? "bg-slate-800/50 border-slate-700" : "bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200"} rounded-lg p-6 border transition-colors`}>
+                  <h4 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-gray-900"} mb-4`}>📋 Data Filters & View Options</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Year</label>
                       <select
                         value={overviewYearFilter}
                         onChange={(e) => setOverviewYearFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className={`w-full px-3 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                       >
-                        <option value="all">All Years</option>
+                        <option value="all" className={darkMode ? "bg-slate-800" : "bg-white"}>All Years</option>
                         {availableYears.map(year => (
-                          <option key={year} value={year}>{year}</option>
+                          <option key={year} value={year} className={darkMode ? "bg-slate-800" : "bg-white"}>{year}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Commodity</label>
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Month</label>
+                      <select
+                        value={overviewMonthFilter}
+                        onChange={(e) => setOverviewMonthFilter(e.target.value)}
+                        className={`w-full px-3 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
+                      >
+                        <option value="all" className={darkMode ? "bg-slate-800" : "bg-white"}>All Months</option>
+                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
+                          <option key={m} value={i + 1} className={darkMode ? "bg-slate-800" : "bg-white"}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Week</label>
+                      <select
+                        value={overviewWeekFilter}
+                        onChange={(e) => setOverviewWeekFilter(e.target.value)}
+                        className={`w-full px-3 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
+                      >
+                        <option value="all" className={darkMode ? "bg-slate-800" : "bg-white"}>All Weeks</option>
+                        {[1, 2, 3, 4, 5].map(w => (
+                          <option key={w} value={w} className={darkMode ? "bg-slate-800" : "bg-white"}>Week {w}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Commodity</label>
                       <select
                         value={overviewCommodityFilter}
                         onChange={(e) => setOverviewCommodityFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className={`w-full px-3 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                       >
-                        <option value="all">All Commodities</option>
-                        {dashboardData.commodities.map(commodity => (
-                          <option key={commodity} value={commodity}>{commodity}</option>
+                        <option value="all" className={darkMode ? "bg-slate-800" : "bg-white"}>All Commodities</option>
+                        {dashboardData.uniqueCommodities.map(commodity => (
+                          <option key={commodity} value={commodity} className={darkMode ? "bg-slate-800" : "bg-white"}>{formatCommodityName(commodity)}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">View Type</label>
-                      <div className="flex gap-2">
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-2`}>Search</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search commodity..."
+                          value={overviewSearchQuery}
+                          onChange={(e) => setOverviewSearchQuery(e.target.value)}
+                          className={`w-full px-3 py-2 pl-9 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50 placeholder:text-slate-600" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 text-sm transition-colors`}
+                        />
+                        <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex gap-2">
                         <button
                           onClick={() => setOverviewDataView('volume')}
-                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${overviewDataView === 'volume'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-700 border border-gray-300'
+                          className={`px-6 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${overviewDataView === 'volume'
+                            ? `bg-blue-600 text-white shadow-lg ${darkMode ? "shadow-blue-900/40" : "shadow-blue-100"}`
+                            : `${darkMode ? "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"} border`
                             }`}
                         >
-                          📦 Volume
+                          📦 Volume View
                         </button>
                         <button
                           onClick={() => setOverviewDataView('price')}
-                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${overviewDataView === 'price'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-white text-gray-700 border border-gray-300'
+                          className={`px-6 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${overviewDataView === 'price'
+                            ? `bg-emerald-600 text-white shadow-lg ${darkMode ? "shadow-emerald-900/40" : "shadow-emerald-100"}`
+                            : `${darkMode ? "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"} border`
                             }`}
                         >
-                          💰 Price
+                          💰 Price View
                         </button>
-                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-gray-400"} uppercase tracking-widest`}>Sort By:</span>
+                      <select 
+                        value={`${overviewSortConfig.key}-${overviewSortConfig.direction}`}
+                        onChange={(e) => {
+                          const [key, direction] = e.target.value.split('-');
+                          setOverviewSortConfig({ key, direction });
+                        }}
+                        className={`bg-transparent text-xs font-bold ${darkMode ? "text-slate-300" : "text-slate-700"} outline-none cursor-pointer`}
+                      >
+                        <option value="date-desc" className={darkMode ? "bg-slate-800" : "bg-white"}>Newest First</option>
+                        <option value="date-asc" className={darkMode ? "bg-slate-800" : "bg-white"}>Oldest First</option>
+                        <option value="volume-desc" className={darkMode ? "bg-slate-800" : "bg-white"}>Highest {overviewDataView === 'volume' ? 'Volume' : 'Price'}</option>
+                        <option value="volume-asc" className={darkMode ? "bg-slate-800" : "bg-white"}>Lowest {overviewDataView === 'volume' ? 'Volume' : 'Price'}</option>
+                        <option value="month-asc" className={darkMode ? "bg-slate-800" : "bg-white"}>Month (Jan-Dec)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
 
-                {/* VOLUME DATA TABLE */}
+                {/* SUMMARY GRID */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
+                    <p className={`text-[10px] font-bold ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-[0.15em] mb-1`}>Filtered Volume</p>
+                    <p className={`text-2xl font-black ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                      {(overviewDataView === 'volume' ? (analyzeVolumeData || []) : [])
+                        .reduce((sum, item) => sum + item.totalVolume, 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      <span className={`text-xs ml-1 font-bold ${darkMode ? "text-slate-600" : "text-slate-300"}`}>Kg</span>
+                    </p>
+                  </div>
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
+                    <p className={`text-[10px] font-bold ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-[0.15em] mb-1`}>Average Price</p>
+                    <p className={`text-2xl font-black ${darkMode ? "text-emerald-400" : "text-green-600"}`}>
+                      ₱{(overviewDataView === 'price' ? (analyzePriceData || []) : [])
+                        .reduce((sum, item, _, arr) => sum + (item.weekAverage || 0) / (arr.length || 1), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
+                    <p className={`text-[10px] font-bold ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-[0.15em] mb-1`}>Data Completeness</p>
+                    <p className={`text-2xl font-black ${darkMode ? "text-slate-200" : "text-slate-700"}`}>
+                      {((overviewDataView === 'volume' ? (analyzeVolumeData || []) : (analyzePriceData || []))
+                        .reduce((sum, item, _, arr) => sum + item.completeness / (arr.length || 1), 0) || 0).toFixed(0)}
+                      <span className={`text-xs ml-1 font-bold ${darkMode ? "text-slate-600" : "text-slate-300"}`}>%</span>
+                    </p>
+                  </div>
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
+                    <p className={`text-[10px] font-bold ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-[0.15em] mb-1`}>Periods Tracked</p>
+                    <p className={`text-2xl font-black ${darkMode ? "text-slate-200" : "text-slate-700"}`}>
+                      {(overviewDataView === 'volume' ? (analyzeVolumeData || []) : (analyzePriceData || [])).length}
+                      <span className={`text-xs ml-1 font-bold ${darkMode ? "text-slate-600" : "text-slate-300"}`}>Weeks</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* VOLUME TABLE */}
                 {overviewDataView === 'volume' && analyzeVolumeData && (
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-gray-200">
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border overflow-hidden transition-colors`}>
+                    <div className={`${darkMode ? "bg-slate-800/80" : "bg-gradient-to-r from-blue-50 to-blue-100"} px-6 py-4 border-b ${darkMode ? "border-slate-700" : "border-gray-200"}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="bg-blue-100 p-2 rounded-lg">
+                          <div className={`${darkMode ? "bg-blue-900/30" : "bg-blue-100"} p-2 rounded-lg`}>
                             <span className="text-xl text-blue-600">📦</span>
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">Volume Data by Week</h3>
-                            <p className="text-sm text-gray-600">Aggregated weekly totals with completeness tracking</p>
+                            <h3 className={`text-lg font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Volume Data by Week</h3>
+                            <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Aggregated weekly totals with completeness tracking</p>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className={`text-sm ${darkMode ? "text-slate-500" : "text-gray-500"}`}>
                           {analyzeVolumeData.length} weeks • {overviewYearFilter === 'all' ? 'All years' : overviewYearFilter}
                         </div>
                       </div>
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className={`min-w-full divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
+                        <thead className={darkMode ? "bg-slate-800/50" : "bg-gray-50"}>
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month/Year</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Volume (Kg)</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodities</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completeness</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Period</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Month/Year</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Total Volume (Kg)</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Commodities</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Completeness</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Details</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className={`${darkMode ? "bg-slate-900" : "bg-white"} divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
                           {analyzeVolumeData.map((item, idx) => {
                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                             const isComplete = item.completeness === 100;
 
                             return (
-                              <tr key={idx} className={`hover:bg-blue-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
+                              <tr key={idx} className={`${darkMode ? "hover:bg-blue-900/10" : "hover:bg-blue-50/30"} transition-colors ${!isComplete ? (darkMode ? "bg-yellow-900/5" : "bg-yellow-50/20") : ""}`}>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className={`text-sm font-medium ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
                                     {item.week_label || `Week ${item.week}, ${monthNames[item.month - 1]} ${item.year}`}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-800"}`}>
                                     W{item.week}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{monthNames[item.month - 1]} {item.year}</div>
+                                  <div className={`text-sm ${darkMode ? "text-slate-300" : "text-gray-900"}`}>{monthNames[item.month - 1]} {item.year}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-lg font-bold text-blue-700">{item.totalVolume.toFixed(2)}</span>
-                                    <span className="text-xs text-gray-500">Kg</span>
+                                    <span className={`text-lg font-black ${darkMode ? "text-blue-400" : "text-blue-700"}`}>{item.totalVolume.toFixed(2)}</span>
+                                    <span className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Kg</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">
-                                    {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.commodities.length : 1}
+                                  <div className={`text-sm ${darkMode ? "text-slate-300" : "text-gray-900"}`}>
+                                    {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.uniqueCommodities.length : 1}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                                      <div className={`w-24 ${darkMode ? "bg-slate-700" : "bg-gray-200"} rounded-full h-2`}>
                                         <div
-                                          className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                          className={`h-2 rounded-full ${isComplete ? (darkMode ? "bg-emerald-500" : "bg-green-500") : "bg-yellow-500"}`}
                                           style={{ width: `${item.completeness}%` }}
                                         ></div>
                                       </div>
-                                      <span className={`text-xs font-bold ${isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
+                                      <span className={`text-xs font-bold ${isComplete ? (darkMode ? "text-emerald-500" : "text-green-600") : "text-yellow-600"}`}>
                                         {item.completeness.toFixed(0)}%
                                       </span>
                                     </div>
                                     {!isComplete && (
-                                      <div className="text-xs text-yellow-600">
-                                        ⚠️ {item.missingCommodities} missing
-                                      </div>
+                                      <div className="text-xs text-yellow-600">⚠️ {item.missingCommodities} missing</div>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="text-xs space-y-1 max-w-xs">
                                     {Object.entries(item.commodities).map(([commodity, volume]) => (
-                                      <div key={commodity} className="flex justify-between">
-                                        <span className="text-gray-600">{commodity} (Per Kg.):</span>
-                                        <span className="font-medium text-gray-900">{volume.toFixed(2)} Kg</span>
+                                      <div key={commodity} className="flex justify-between gap-4">
+                                        <span className={darkMode ? "text-slate-400" : "text-gray-600"}>{formatCommodityName(commodity)}:</span>
+                                        <span className={`font-bold ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{volume.toFixed(2)} Kg</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1465,28 +1611,27 @@ CONFIG = {
                       </table>
                     </div>
 
-                    {/* Summary Footer */}
-                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                      <div className="grid grid-cols-4 gap-4 text-sm">
+                    <div className={`${darkMode ? "bg-slate-800/50" : "bg-gray-50"} px-6 py-4 border-t ${darkMode ? "border-slate-800" : "border-gray-200"}`}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Total Weeks:</span>
-                          <span className="ml-2 font-bold text-gray-900">{analyzeVolumeData.length}</span>
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Total Weeks:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{analyzeVolumeData.length}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Total Volume:</span>
-                          <span className="ml-2 font-bold text-blue-700">
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Total Volume:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-blue-400" : "text-blue-700"}`}>
                             {analyzeVolumeData.reduce((sum, item) => sum + item.totalVolume, 0).toFixed(2)} Kg
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Complete Weeks:</span>
-                          <span className="ml-2 font-bold text-green-600">
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Complete Weeks:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-emerald-500" : "text-green-600"}`}>
                             {analyzeVolumeData.filter(item => item.completeness === 100).length}
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Incomplete Weeks:</span>
-                          <span className="ml-2 font-bold text-yellow-600">
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Incomplete:</span>
+                          <span className="ml-2 font-black text-yellow-600">
                             {analyzeVolumeData.filter(item => item.completeness < 100).length}
                           </span>
                         </div>
@@ -1495,118 +1640,116 @@ CONFIG = {
                   </div>
                 )}
 
-                {/* PRICE DATA TABLE */}
+                {/* PRICE TABLE */}
                 {overviewDataView === 'price' && analyzePriceData && (
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-4 border-b border-gray-200">
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border overflow-hidden transition-colors`}>
+                    <div className={`${darkMode ? "bg-slate-800/80" : "bg-gradient-to-r from-green-50 to-green-100"} px-6 py-4 border-b ${darkMode ? "border-slate-700" : "border-gray-200"}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="bg-green-100 p-2 rounded-lg">
+                          <div className={`${darkMode ? "bg-green-900/30" : "bg-green-100"} p-2 rounded-lg`}>
                             <span className="text-xl text-green-600">💰</span>
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">Price Data by Week (LP/HP/AP)</h3>
-                            <p className="text-sm text-gray-600">Lowest, Highest, and Average prices with completeness tracking</p>
+                            <h3 className={`text-lg font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Price Data by Week (LP/HP/AP)</h3>
+                            <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Lowest, Highest, and Average prices with completeness tracking</p>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className={`text-sm ${darkMode ? "text-slate-500" : "text-gray-500"}`}>
                           {analyzePriceData.length} weeks • {overviewYearFilter === 'all' ? 'All years' : overviewYearFilter}
                         </div>
                       </div>
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className={`min-w-full divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
+                        <thead className={darkMode ? "bg-slate-800/50" : "bg-gray-50"}>
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month/Year</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week LP (₱)</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week HP (₱)</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week AP (₱)</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completeness</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodity Details</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Period</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Month/Year</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week LP (₱)</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week HP (₱)</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week AP (₱)</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Completeness</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Commodity Details</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className={`${darkMode ? "bg-slate-900" : "bg-white"} divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
                           {analyzePriceData.map((item, idx) => {
                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                             const isComplete = item.completeness === 100;
 
                             return (
-                              <tr key={idx} className={`hover:bg-green-50/30 transition-colors ${!isComplete ? 'bg-yellow-50/20' : ''}`}>
+                              <tr key={idx} className={`${darkMode ? "hover:bg-green-900/10" : "hover:bg-green-50/30"} transition-colors ${!isComplete ? (darkMode ? "bg-yellow-900/5" : "bg-yellow-50/20") : ""}`}>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className={`text-sm font-medium ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
                                     {item.week_label || `Week ${item.week}, ${monthNames[item.month - 1]} ${item.year}`}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${darkMode ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-800"}`}>
                                     W{item.week}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{monthNames[item.month - 1]} {item.year}</div>
+                                  <div className={`text-sm ${darkMode ? "text-slate-300" : "text-gray-900"}`}>{monthNames[item.month - 1]} {item.year}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-1">
-                                    <span className="text-sm font-bold text-red-600">₱{item.weekLowest?.toFixed(2) || 'N/A'}</span>
-                                    <span className="text-xs text-gray-400">LP</span>
+                                    <span className={`text-sm font-black ${darkMode ? "text-rose-400" : "text-red-600"}`}>₱{item.weekLowest?.toFixed(2) || 'N/A'}</span>
+                                    <span className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-400"}`}>LP</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-1">
-                                    <span className="text-sm font-bold text-emerald-600">₱{item.weekHighest?.toFixed(2) || 'N/A'}</span>
-                                    <span className="text-xs text-gray-400">HP</span>
+                                    <span className={`text-sm font-black ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>₱{item.weekHighest?.toFixed(2) || 'N/A'}</span>
+                                    <span className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-400"}`}>HP</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-1">
-                                    <span className="text-sm font-bold text-green-700">₱{item.weekAverage?.toFixed(2) || 'N/A'}</span>
-                                    <span className="text-xs text-gray-400">AP</span>
+                                    <span className={`text-sm font-black ${darkMode ? "text-green-500" : "text-green-700"}`}>₱{item.weekAverage?.toFixed(2) || 'N/A'}</span>
+                                    <span className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-400"}`}>AP</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
-                                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                                      <div className={`w-24 ${darkMode ? "bg-slate-700" : "bg-gray-200"} rounded-full h-2`}>
                                         <div
-                                          className={`h-2 rounded-full ${isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                          className={`h-2 rounded-full ${isComplete ? (darkMode ? "bg-emerald-500" : "bg-green-500") : "bg-yellow-500"}`}
                                           style={{ width: `${item.completeness}%` }}
                                         ></div>
                                       </div>
-                                      <span className={`text-xs font-bold ${isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
+                                      <span className={`text-xs font-bold ${isComplete ? (darkMode ? "text-emerald-500" : "text-green-600") : "text-yellow-600"}`}>
                                         {item.completeness.toFixed(0)}%
                                       </span>
                                     </div>
-                                    <div className="text-xs text-gray-600">
-                                      {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.commodities.length : 1}
+                                    <div className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-600"}`}>
+                                      {Object.keys(item.commodities).length} / {overviewCommodityFilter === 'all' ? dashboardData.uniqueCommodities.length : 1}
                                     </div>
                                     {!isComplete && (
-                                      <div className="text-xs text-yellow-600">
-                                        ⚠️ {item.missingCommodities} missing
-                                      </div>
+                                      <div className="text-[10px] text-yellow-600">⚠️ {item.missingCommodities} missing</div>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="text-xs space-y-2 max-w-sm">
                                     {Object.entries(item.commodities).map(([commodity, prices]) => (
-                                      <div key={commodity} className="border-l-2 border-green-200 pl-2">
-                                        <div className="font-medium text-gray-900 mb-1">{commodity} (Per Kg.)</div>
+                                      <div key={commodity} className={`border-l-2 ${darkMode ? "border-green-800" : "border-green-200"} pl-2`}>
+                                        <div className={`font-bold ${darkMode ? "text-slate-200" : "text-gray-900"} mb-1`}>{formatCommodityName(commodity)}</div>
                                         <div className="grid grid-cols-3 gap-2">
                                           <div>
-                                            <span className="text-gray-500">LP:</span>
-                                            <span className="ml-1 text-red-600 font-medium">₱{prices.lowest.toFixed(2)}</span>
+                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>LP:</span>
+                                            <span className={`ml-1 ${darkMode ? "text-rose-400" : "text-red-600"} font-bold`}>₱{prices.lowest.toFixed(2)}</span>
                                           </div>
                                           <div>
-                                            <span className="text-gray-500">HP:</span>
-                                            <span className="ml-1 text-emerald-600 font-medium">₱{prices.highest.toFixed(2)}</span>
+                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>HP:</span>
+                                            <span className={`ml-1 ${darkMode ? "text-emerald-400" : "text-emerald-600"} font-bold`}>₱{prices.highest.toFixed(2)}</span>
                                           </div>
                                           <div>
-                                            <span className="text-gray-500">AP:</span>
-                                            <span className="ml-1 text-green-700 font-medium">₱{prices.average.toFixed(2)}</span>
+                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>AP:</span>
+                                            <span className={`ml-1 ${darkMode ? "text-green-500" : "text-green-700"} font-bold`}>₱{prices.average.toFixed(2)}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -1620,28 +1763,27 @@ CONFIG = {
                       </table>
                     </div>
 
-                    {/* Summary Footer */}
-                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                      <div className="grid grid-cols-4 gap-4 text-sm">
+                    <div className={`${darkMode ? "bg-slate-800/50" : "bg-gray-50"} px-6 py-4 border-t ${darkMode ? "border-slate-800" : "border-gray-200"}`}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Total Weeks:</span>
-                          <span className="ml-2 font-bold text-gray-900">{analyzePriceData.length}</span>
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Total Weeks:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{analyzePriceData.length}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Avg Weekly Price:</span>
-                          <span className="ml-2 font-bold text-green-700">
-                            ₱{(analyzePriceData.reduce((sum, item) => sum + (item.weekAverage || 0), 0) / analyzePriceData.length).toFixed(2)}
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Avg Weekly Price:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-green-500" : "text-green-700"}`}>
+                            ₱{(analyzePriceData.reduce((sum, item) => sum + (item.weekAverage || 0), 0) / (analyzePriceData.length || 1)).toFixed(2)}
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Complete Weeks:</span>
-                          <span className="ml-2 font-bold text-green-600">
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Complete Weeks:</span>
+                          <span className={`ml-2 font-black ${darkMode ? "text-emerald-500" : "text-green-600"}`}>
                             {analyzePriceData.filter(item => item.completeness === 100).length}
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Incomplete Weeks:</span>
-                          <span className="ml-2 font-bold text-yellow-600">
+                          <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Incomplete:</span>
+                          <span className="ml-2 font-black text-yellow-600">
                             {analyzePriceData.filter(item => item.completeness < 100).length}
                           </span>
                         </div>
@@ -1655,84 +1797,83 @@ CONFIG = {
             {/* TRAINING TAB */}
             {activeTab === 'training' && (
               <div className="space-y-8">
-                {/* Model Performance Summary */}
                 {modelInfo && modelInfo.models && (
-                  <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                      <span className="text-6xl">📊</span>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm relative overflow-hidden transition-colors`}>
+                    <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"} mb-6 flex items-center gap-2`}>
                       <span>📉</span> Model Performance Summary
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {modelInfo.models.map((model) => (
-                        <div key={model.model_key} className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:border-green-200 transition-all">
+                        <div key={model.model_key} className={`${darkMode ? "bg-slate-800/50 border-slate-700 hover:border-green-500/30" : "bg-gray-50 border-gray-100 hover:border-green-200"} rounded-xl p-5 border transition-all`}>
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                              <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase tracking-wider mb-1`}>
                                 Global {model.data_type} Model
                               </p>
-                              <h4 className="text-lg font-bold text-gray-900">
+                              <h4 className={`text-lg font-black ${darkMode ? "text-slate-100" : "text-gray-900"}`}>
                                 {model.data_type === 'price' ? '💰 Price Prediction' : '📦 Volume Prediction'}
                               </h4>
                             </div>
-                            <div className={`px-2 py-1 rounded text-xs font-bold ${model.is_loaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            <div className={`px-2 py-1 rounded text-[10px] font-black ${model.is_loaded 
+                              ? (darkMode ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/30' : 'bg-green-100 text-green-700') 
+                              : (darkMode ? 'bg-rose-900/30 text-rose-400 border border-rose-800/30' : 'bg-red-100 text-red-700')}`}>
                               {model.is_loaded ? '● Loaded' : '○ Missing'}
                             </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-3 mb-4">
-                            <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                              <p className="text-xs text-gray-500 mb-1">Accuracy</p>
-                              <p className={`text-2xl font-black ${model.performance?.accuracy > 50 ? 'text-green-600' : 'text-amber-600'}`}>
+                            <div className={`${darkMode ? "bg-slate-900/50 border-slate-700" : "bg-white border-gray-100"} p-3 rounded-lg border shadow-sm`}>
+                              <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} mb-1`}>Accuracy</p>
+                              <p className={`text-2xl font-black ${model.performance?.accuracy > 50 
+                                ? (darkMode ? 'text-emerald-400' : 'text-green-600') 
+                                : (darkMode ? 'text-amber-400' : 'text-amber-600')}`}>
                                 {model.performance?.accuracy ? `${model.performance.accuracy.toFixed(1)}%` : 'N/A'}
                               </p>
                             </div>
-                            <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                              <p className="text-xs text-gray-500 mb-1">Status</p>
-                              <p className="text-sm font-bold text-gray-700">
+                            <div className={`${darkMode ? "bg-slate-900/50 border-slate-700" : "bg-white border-gray-100"} p-3 rounded-lg border shadow-sm`}>
+                              <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} mb-1`}>Status</p>
+                              <p className={`text-sm font-black ${darkMode ? "text-slate-300" : "text-gray-700"}`}>
                                 {model.performance?.accuracy > 70 ? 'Excellent' : model.performance?.accuracy > 50 ? 'Stable' : 'Training Needed'}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
-                            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                            Last Trained: {model.training_date !== 'Unknown' ? new Date(model.training_date).toLocaleDateString() + ' ' + new Date(model.training_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                          <div className={`flex items-center gap-2 text-[10px] ${darkMode ? "text-slate-500" : "text-gray-400"} font-black`}>
+                            <span className={`w-2 h-2 rounded-full ${darkMode ? "bg-blue-500" : "bg-blue-400"}`}></span>
+                            Last Trained: {model.training_date !== 'Unknown'
+                              ? new Date(model.training_date).toLocaleDateString() + ' ' + new Date(model.training_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : 'Never'}
                           </div>
                         </div>
                       ))}
                     </div>
                     {modelInfo.total_models === 0 && (
-                      <div className="text-center py-6 text-gray-500">
+                      <div className={`text-center py-6 ${darkMode ? "text-slate-500" : "text-gray-500"}`}>
                         No global models found. Please upload data and train the system.
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* 1. Upload & Controls */}
-                <div className="bg-white rounded-lg p-6 border border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">🚀 Train New Models</h3>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm transition-colors`}>
+                  <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"} mb-6`}>🚀 Train New Models</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* File Upload Area */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-4">
+                      <label className={`block text-sm font-medium ${darkMode ? "text-slate-400" : "text-gray-700"} mb-4`}>
                         1. Upload Training Dataset (CSV)
                       </label>
-
                       <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <label className={`flex flex-col items-center justify-center w-full h-48 border-2 ${darkMode ? "border-slate-700 bg-slate-800/50 hover:bg-slate-800" : "border-gray-300 bg-gray-50 hover:bg-gray-100"} border-dashed rounded-lg cursor-pointer transition-colors`}>
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <span className="text-4xl mb-3">📄</span>
-                            <p className="mb-2 text-sm text-gray-500">
-                              <span className="font-semibold">Click to upload</span> or drag and drop
+                            <p className={`mb-2 text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>
+                              <span className="font-bold">Click to upload</span> or drag and drop
                             </p>
-                            <p className="text-xs text-gray-500">CSV file with: Date, Commodity, Volume, Price</p>
+                            <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"}`}>CSV file with: Date, Commodity, Volume, Price</p>
                             {uploadFile && (
-                              <div className="mt-4 px-4 py-2 bg-green-100 text-green-800 rounded-lg flex items-center gap-2">
-                                <span>✅ {uploadFile.name}</span>
+                              <div className={`mt-4 px-4 py-2 ${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-green-100 text-green-800"} rounded-lg flex items-center gap-2`}>
+                                <span className="font-bold">✅ {uploadFile.name}</span>
                               </div>
                             )}
                           </div>
@@ -1740,29 +1881,25 @@ CONFIG = {
                         </label>
                       </div>
 
-                      {/* Progress Bar */}
                       {uploadProgress > 0 && (
                         <div className="mt-4">
                           <div className="flex justify-between mb-1">
-                            <span className="text-sm font-medium text-blue-700">Uploading...</span>
-                            <span className="text-sm font-medium text-blue-700">{uploadProgress}%</span>
+                            <span className={`text-xs font-bold ${darkMode ? "text-blue-400" : "text-blue-700"}`}>Uploading...</span>
+                            <span className={`text-xs font-bold ${darkMode ? "text-blue-400" : "text-blue-700"}`}>{uploadProgress}%</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+                          <div className={`w-full ${darkMode ? "bg-slate-800" : "bg-gray-200"} rounded-full h-2`}>
+                            <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Actions Area */}
                     <div className="flex flex-col justify-center space-y-4">
-                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                      <div className={`${darkMode ? "bg-amber-900/10 border-amber-800/50" : "bg-yellow-50 border-yellow-400"} border-l-4 p-4 rounded`}>
                         <div className="flex">
-                          <div className="flex-shrink-0">
-                            ⚠️
-                          </div>
+                          <div className="flex-shrink-0">⚠️</div>
                           <div className="ml-3">
-                            <p className="text-sm text-yellow-700">
+                            <p className={`text-sm ${darkMode ? "text-amber-400" : "text-yellow-700"}`}>
                               Training takes about <strong>15-30 minutes</strong>.
                               The system will train models for ALL 18 commodities (Price & Volume).
                               Please do not close this tab while training.
@@ -1774,12 +1911,12 @@ CONFIG = {
                       <button
                         onClick={handleUploadAndTrain}
                         disabled={isTraining || !uploadFile}
-                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 border border-transparent text-lg font-medium rounded-lg text-white shadow-sm transition-all
+                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 border border-transparent text-lg font-black rounded-lg text-white shadow-sm transition-all
                           ${isTraining
-                            ? 'bg-gray-400 cursor-not-allowed'
+                            ? (darkMode ? 'bg-slate-800 text-slate-500' : 'bg-gray-400')
                             : !uploadFile
-                              ? 'bg-gray-300 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.02]'
+                              ? (darkMode ? 'bg-slate-800 text-slate-600' : 'bg-gray-300')
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.01] active:scale-[0.99] shadow-lg'
                           }`}
                       >
                         {isTraining ? (
@@ -1788,37 +1925,33 @@ CONFIG = {
                             Training in Progress...
                           </>
                         ) : (
-                          <>
-                            <span>🚀</span>
-                            Start Training Pipeline
-                          </>
+                          <><span>🚀</span> Start Training Pipeline</>
                         )}
                       </button>
 
                       {!uploadFile && (
-                        <p className="text-center text-sm text-gray-500">Please upload a CSV file to enable training</p>
+                        <p className={`text-center text-xs font-bold ${darkMode ? "text-slate-600" : "text-gray-500"}`}>Please upload a CSV file to enable training</p>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* 2. Terminal Output */}
-                <div className="bg-gray-900 rounded-lg shadow-xl overflow-hidden border border-gray-700">
-                  <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex justify-between items-center">
-                    <span className="text-gray-300 font-mono text-sm">🖥️ Training Logs (Live Stream)</span>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-700" : "bg-gray-900 border-gray-700"} rounded-lg shadow-xl overflow-hidden border transition-colors`}>
+                  <div className={`${darkMode ? "bg-slate-800" : "bg-gray-800"} px-4 py-3 border-b border-gray-700 flex justify-between items-center`}>
+                    <span className="text-gray-300 font-mono text-xs font-bold">🖥️ Training Logs (Live Stream)</span>
                     {isTraining && (
-                      <span className="flex items-center gap-2 px-2 py-1 bg-green-900/50 rounded text-green-400 text-xs animate-pulse">
+                      <span className="flex items-center gap-2 px-2 py-1 bg-green-900/50 rounded text-green-400 text-[10px] font-black animate-pulse">
                         ● Live
                       </span>
                     )}
                   </div>
-                  <div className="p-4 h-96 overflow-y-auto font-mono text-xs sm:text-sm text-green-400 space-y-1">
+                  <div className={`p-4 h-96 overflow-y-auto font-mono text-xs ${darkMode ? "text-blue-400" : "text-green-400"} space-y-1 bg-black/50`}>
                     {trainingLogs.length === 0 ? (
-                      <div className="text-gray-500 italic text-center mt-20">Waiting for training to start...</div>
+                      <div className="text-gray-600 italic text-center mt-20">Waiting for training to start...</div>
                     ) : (
                       trainingLogs.map((log, index) => (
-                        <div key={index} className="break-words border-l-2 border-transparent hover:border-green-600 pl-2">
-                          <span className="opacity-50 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                        <div key={index} className={`break-words border-l-2 border-transparent hover:border-blue-600 pl-2 py-0.5`}>
+                          <span className="opacity-40 mr-2">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
                           {log}
                         </div>
                       ))
@@ -1827,27 +1960,25 @@ CONFIG = {
                   </div>
                 </div>
 
-                {/* 3. Results Gallery */}
                 {!isTraining && dashboardData && (
-                  <div className="bg-white rounded-lg p-6 border border-gray-200 animate-fade-in">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm transition-colors`}>
+                    <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"} mb-6 flex items-center gap-2`}>
                       <span>🖼️</span> Model Training Visualizations
                     </h3>
-                    <p className="text-sm text-gray-500 mb-6 italic">
+                    <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"} mb-6 italic`}>
                       These plots show how the LSTM models perform on historical data for each commodity.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {dashboardData.commodities.map(commodity => (
-                        <div key={commodity} className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                          <div className="text-sm font-bold text-gray-700 pb-2 border-b border-gray-200 mb-2">{commodity} (Per Kg.)</div>
+                      {dashboardData.uniqueCommodities.map(commodity => (
+                        <div key={commodity} className={`space-y-4 ${darkMode ? "bg-slate-800/50 border-slate-700" : "bg-gray-50 border-gray-100"} p-4 rounded-xl border transition-colors`}>
+                          <div className={`text-sm font-black ${darkMode ? "text-slate-300" : "text-gray-700"} pb-2 border-b ${darkMode ? "border-slate-700" : "border-gray-200"} mb-2`}>{formatCommodityName(commodity)}</div>
 
-                          {/* Price Plot */}
-                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
-                            <div className="bg-blue-50 px-3 py-1 text-[10px] font-bold text-blue-600 uppercase">Price Model</div>
+                          <div className={`border ${darkMode ? "border-slate-700" : "border-gray-200"} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all bg-white`}>
+                            <div className={`${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"} px-3 py-1 text-[10px] font-black uppercase`}>Price Model</div>
                             <img
                               src={`${API_BASE_URL}/plots/global_model_${commodity.toLowerCase()}_price_training.png`}
                               alt={`${commodity} Price`}
-                              className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              className={`w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity ${darkMode ? "invert opacity-80" : ""}`}
                               onError={(e) => {
                                 const currentSrc = e.target.src;
                                 if (currentSrc.includes('global_model_')) {
@@ -1860,16 +1991,13 @@ CONFIG = {
                             />
                           </div>
 
-                          {/* Volume Plot */}
-                          <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
-                            <div className="bg-green-50 px-3 py-1 text-[10px] font-bold text-green-600 uppercase">Volume Model</div>
+                          <div className={`border ${darkMode ? "border-slate-700" : "border-gray-200"} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all bg-white`}>
+                            <div className={`${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-green-50 text-green-600"} px-3 py-1 text-[10px] font-black uppercase`}>Volume Model</div>
                             <img
                               src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_volume_training.png`}
                               alt={`${commodity} Volume`}
-                              className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                              onError={(e) => {
-                                e.target.parentElement.style.display = 'none';
-                              }}
+                              className={`w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity ${darkMode ? "invert opacity-80" : ""}`}
+                              onError={(e) => { e.target.parentElement.style.display = 'none'; }}
                               onClick={(e) => window.open(e.target.src, '_blank')}
                             />
                           </div>
@@ -1881,206 +2009,228 @@ CONFIG = {
               </div>
             )}
 
-            {/* Commodity Tab */}
+            {/* COMMODITY TAB */}
             {activeTab === 'commodity' && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Commodity</label>
-                    <select
-                      value={chartCommodity}
-                      onChange={(e) => setChartCommodity(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                    >
-                      {dashboardData.commodities.map(commodity => (
-                        <option key={commodity} value={commodity}>{commodity} (Per Kg.)</option>
-                      ))}
-                    </select>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm transition-colors`}>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Commodity Deep-Dive</h3>
+                      <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Detailed price and volume analysis for specific commodities</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Commodity:</label>
+                        <select
+                          value={chartCommodity}
+                          onChange={(e) => setChartCommodity(e.target.value)}
+                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                        >
+                          {dashboardData?.uniqueCommodities?.map(c => (
+                            <option key={c} value={c}>{formatCommodityName(c)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Week Range:</label>
+                        <select
+                          value={selectedWeekRange}
+                          onChange={(e) => setSelectedWeekRange(e.target.value)}
+                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                        >
+                          {['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-52'].map(range => (
+                            <option key={range} value={range}>Week {range}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Year:</label>
+                        <select
+                          value={chartYearFilter}
+                          onChange={(e) => setChartYearFilter(e.target.value)}
+                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                        >
+                          <option value="all">All Years</option>
+                          {availableYears.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Week Range</label>
-                    <select
-                      value={selectedWeekRange}
-                      onChange={(e) => setSelectedWeekRange(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                    >
-                      {weekRanges.map(range => (
-                        <option key={range.value} value={range.value}>{range.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
-                    <select
-                      value={chartYearFilter}
-                      onChange={(e) => setChartYearFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="all">All Years</option>
-                      {availableYears.map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+                    <div className={`${darkMode ? "bg-slate-800/50 border-slate-700 shadow-lg" : "bg-gradient-to-br from-green-50 to-emerald-50 border-green-100 shadow-sm"} rounded-xl p-5 border relative overflow-hidden transition-all`}>
+                      <div className={`absolute top-0 right-0 p-4 text-4xl opacity-10 ${darkMode ? "text-green-400" : "text-green-600"}`}>📈</div>
+                      <h4 className={`text-xs font-black ${darkMode ? "text-slate-400" : "text-green-800"} uppercase tracking-wider mb-2`}>Market Sentiment</h4>
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className={`text-3xl font-black ${darkMode ? "text-green-400" : "text-green-700"}`}>
+                          {sentimentData?.score?.toFixed(1) || '0.0'}
+                        </span>
+                        <span className={`text-xs font-bold ${darkMode ? "text-slate-500" : "text-green-600 opacity-60"}`}>/ 100</span>
+                      </div>
+                      <p className={`text-sm font-black ${darkMode ? "text-slate-300" : "text-gray-900"}`}>{sentimentData?.label || 'Calculating...'}</p>
+                      <div className={`mt-3 pt-3 border-t ${darkMode ? "border-slate-700" : "border-green-200/50"} text-[10px] ${darkMode ? "text-slate-500" : "text-green-800/60"} font-bold`}>
+                        Based on price volatility & liquidity
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className={`${darkMode ? "bg-slate-800/30 border-slate-700" : "bg-white border-gray-100"} rounded-xl p-4 border transition-colors`}>
+                        <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase font-black mb-1`}>Total Volume</p>
+                        <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
+                          {dashboardData?.commodityDetails?.[chartCommodity]?.total_volume?.toLocaleString()} <span className="text-xs font-normal">MT</span>
+                        </p>
+                      </div>
+                      <div className={`${darkMode ? "bg-slate-800/30 border-slate-700" : "bg-white border-gray-100"} rounded-xl p-4 border transition-colors`}>
+                        <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase font-black mb-1`}>Average Price</p>
+                        <p className={`text-xl font-black ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
+                          ₱{dashboardData?.commodityDetails?.[chartCommodity]?.avg_price?.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className={`${darkMode ? "bg-slate-800/30 border-slate-700" : "bg-white border-gray-100"} rounded-xl p-4 border transition-colors`}>
+                        <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase font-black mb-1`}>Data Points</p>
+                        <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
+                          {dashboardData?.commodityDetails?.[chartCommodity]?.count} weeks
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-lg shadow-md p-6">
-                    {volumeChart.series.length > 0 ? (
-                      <ReactApexChart
-                        options={volumeChart.options}
-                        series={volumeChart.series}
-                        type="bar"
-                        height={300}
-                      />
-                    ) : (
-                      <div className="text-center py-12 text-gray-500">No data available</div>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-lg shadow-md p-6">
-                    {priceChart.series.length > 0 ? (
-                      <ReactApexChart
-                        options={priceChart.options}
-                        series={priceChart.series}
-                        type="bar"
-                        height={300}
-                      />
-                    ) : (
-                      <div className="text-center py-12 text-gray-500">No data available</div>
-                    )}
-                  </div>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg shadow-md p-6 transition-colors`}>
+                  <h4 className={`text-sm font-black ${darkMode ? "text-slate-400" : "text-gray-700"} uppercase mb-4`}>Volume Trends</h4>
+                  {volumeChart.series.length > 0 ? (
+                    <ReactApexChart options={volumeChart.options} series={volumeChart.series} type="bar" height={300} />
+                  ) : (
+                    <div className={`text-center py-12 ${darkMode ? "text-slate-500" : "text-gray-500"}`}>No data available</div>
+                  )}
+                </div>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg shadow-md p-6 transition-colors`}>
+                  <h4 className={`text-sm font-black ${darkMode ? "text-slate-400" : "text-gray-700"} uppercase mb-4`}>Price Volatility</h4>
+                  {priceChart.series.length > 0 ? (
+                    <ReactApexChart options={priceChart.options} series={priceChart.series} type="bar" height={300} />
+                  ) : (
+                    <div className={`text-center py-12 ${darkMode ? "text-slate-500" : "text-gray-500"}`}>No data available</div>
+                  )}
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <ReactApexChart
-                    options={mixedChart.options}
-                    series={mixedChart.series}
-                    type="line"
-                    height={400}
-                  />
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                  <h4 className={`text-sm font-black ${darkMode ? "text-slate-400" : "text-gray-700"} uppercase mb-4`}>Volume vs Price Correlation</h4>
+                  <ReactApexChart options={mixedChart.options} series={mixedChart.series} type="line" height={400} />
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <ReactApexChart
-                    options={stackedChart.options}
-                    series={stackedChart.series}
-                    type="bar"
-                    height={350}
-                  />
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                  <h4 className={`text-sm font-black ${darkMode ? "text-slate-400" : "text-gray-700"} uppercase mb-4`}>Weekly Distribution</h4>
+                  <ReactApexChart options={stackedChart.options} series={stackedChart.series} type="bar" height={350} />
                 </div>
               </div>
             )}
 
-            {/* Comparison Tab */}
+            {/* COMPARISON TAB */}
             {activeTab === 'comparison' && (
               <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Commodities to Compare</h3>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                    {dashboardData.commodities.slice(0, 8).map(commodity => (
-                      <label
-                        key={commodity}
-                        className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all border-2 ${comparisonCommodities.includes(commodity)
-                          ? 'bg-blue-100 border-blue-500 shadow-md'
-                          : 'bg-white border-gray-200 hover:border-blue-300'
-                          }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={comparisonCommodities.includes(commodity)}
-                          onChange={(e) => {
-                            if (e.target.checked && comparisonCommodities.length < 5) {
-                              setComparisonCommodities([...comparisonCommodities, commodity]);
-                            } else if (!e.target.checked) {
-                              setComparisonCommodities(comparisonCommodities.filter(c => c !== commodity));
-                            }
-                          }}
-                          className="w-4 h-4 text-blue-600 rounded"
-                        />
-                        <span className="text-sm font-medium text-gray-900">{commodity} (Per Kg.)</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
-                      <select
-                        value={comparisonDataType}
-                        onChange={(e) => setComparisonDataType(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="volume">📦 Volume (Kg)</option>
-                        <option value="price">💰 Price (₱)</option>
-                      </select>
+                <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm transition-colors`}>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Market Comparison</h3>
+                      <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Contrast prices and volumes across multiple commodities</p>
                     </div>
-
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Year</label>
-                      <select
-                        value={comparisonYearFilter}
-                        onChange={(e) => setComparisonYearFilter(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="all">All Years</option>
-                        {availableYears.map(year => (
-                          <option key={year} value={year}>{year}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-end">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Data Type:</label>
+                        <select
+                          value={comparisonDataType}
+                          onChange={(e) => setComparisonDataType(e.target.value)}
+                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                        >
+                          <option value="volume">📦 Volume (Kg)</option>
+                          <option value="price">💰 Price (₱)</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Year:</label>
+                        <select
+                          value={comparisonYearFilter}
+                          onChange={(e) => setComparisonYearFilter(e.target.value)}
+                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                        >
+                          <option value="all">All Years</option>
+                          {availableYears.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         onClick={() => setComparisonCommodities([])}
-                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-bold"
                       >
                         Clear Selection
                       </button>
                     </div>
                   </div>
 
+                  <div className="mb-8">
+                    <label className={`block text-xs font-black ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase tracking-wider mb-3`}>
+                      Select Commodities to Compare (max 5)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {dashboardData?.uniqueCommodities?.map(commodity => {
+                        const isSelected = comparisonCommodities.includes(commodity);
+                        return (
+                          <button
+                            key={commodity}
+                            onClick={() => {
+                              if (isSelected) {
+                                setComparisonCommodities(prev => prev.filter(c => c !== commodity));
+                              } else if (comparisonCommodities.length < 5) {
+                                setComparisonCommodities(prev => [...prev, commodity]);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border
+                              ${isSelected
+                                ? (darkMode ? 'bg-green-600 border-green-500 text-white shadow-lg' : 'bg-green-600 border-green-600 text-white shadow-md')
+                                : (darkMode
+                                  ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                                  : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300')
+                              }`}
+                          >
+                            {formatCommodityName(commodity)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {comparisonCommodities.length > 0 && (
-                    <div className="mt-3 text-sm text-gray-600">
+                    <div className={`mt-3 text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                       <span className="font-semibold">{comparisonCommodities.length}</span> commodities selected (max 5)
                     </div>
                   )}
                 </div>
 
                 {comparisonCommodities.length > 0 && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <ReactApexChart
-                      options={multiBarChart.options}
-                      series={multiBarChart.series}
-                      type="bar"
-                      height={400}
-                    />
-                  </div>
-                )}
-
-                {comparisonCommodities.length > 0 && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <ReactApexChart
-                      options={trendLineChart.options}
-                      series={trendLineChart.series}
-                      type="line"
-                      height={400}
-                    />
-                  </div>
+                  <>
+                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                      <ReactApexChart options={multiBarChart.options} series={multiBarChart.series} type="bar" height={400} />
+                    </div>
+                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                      <ReactApexChart options={trendLineChart.options} series={trendLineChart.series} type="line" height={400} />
+                    </div>
+                  </>
                 )}
 
                 {comparisonCommodities.length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <div className={`${darkMode ? "bg-slate-800/50 text-slate-400" : "bg-gray-50 text-gray-600"} text-center py-12 rounded-lg`}>
                     <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Select Commodities to Compare</h3>
-                    <p className="text-gray-600">Choose up to 5 commodities from the list above to see comparison charts</p>
+                    <h3 className={`text-xl font-semibold ${darkMode ? "text-white" : "text-gray-900"} mb-2`}>Select Commodities to Compare</h3>
+                    <p className={`${darkMode ? "text-slate-400" : "text-gray-600"}`}>Choose up to 5 commodities from the list above to see comparison charts</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Forecast Tab */}
+            {/* FORECAST TAB */}
             {activeTab === 'forecast' && (
               <div>
                 {forecastResult ? (
@@ -2088,71 +2238,62 @@ CONFIG = {
                     <div className="flex gap-2">
                       <button
                         onClick={exportForecastToCSV}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded flex items-center gap-2"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transform hover:scale-[1.02] transition-all"
                       >
                         <span>📥</span>
                         <span>Export CSV</span>
                       </button>
                     </div>
 
-                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">📈 Performance Metrics</h3>
+                    <div className={`${darkMode ? "bg-blue-900/10 border-blue-900/30" : "bg-blue-50 border-blue-200"} rounded-lg p-6 border transition-colors`}>
+                      <h3 className={`text-lg font-black ${darkMode ? "text-blue-400" : "text-gray-900"} mb-4`}>📈 Performance Metrics</h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {(forecastResult.metrics.rmse !== undefined || forecastResult.metrics.accuracy !== undefined) && (
-                          <>
-                            {forecastResult.metrics.rmse !== undefined && (
-                              <div>
-                                <p className="text-sm text-gray-600">RMSE</p>
-                                <p className="text-xl font-bold">{forecastResult.metrics.rmse.toFixed(2)}</p>
-                              </div>
-                            )}
-                            {forecastResult.metrics.mae !== undefined && (
-                              <div>
-                                <p className="text-sm text-gray-600">MAE</p>
-                                <p className="text-xl font-bold">{forecastResult.metrics.mae.toFixed(2)}</p>
-                              </div>
-                            )}
-                            {forecastResult.metrics.mape !== undefined && (
-                              <div>
-                                <p className="text-sm text-gray-600">MAPE</p>
-                                <p className="text-xl font-bold">{forecastResult.metrics.mape.toFixed(2)}%</p>
-                              </div>
-                            )}
-                            {forecastResult.metrics.accuracy !== undefined && (
-                              <div>
-                                <p className="text-sm text-gray-600">Accuracy</p>
-                                <p className="text-xl font-bold text-green-600">{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
-                              </div>
-                            )}
-                          </>
+                        {forecastResult.metrics.rmse !== undefined && (
+                          <div className={`${darkMode ? "bg-slate-900/50 border-white/5" : "bg-white border-gray-100"} p-3 rounded-lg border`}>
+                            <p className={`text-[10px] uppercase font-black ${darkMode ? "text-slate-500" : "text-gray-600"}`}>RMSE</p>
+                            <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{forecastResult.metrics.rmse.toFixed(2)}</p>
+                          </div>
+                        )}
+                        {forecastResult.metrics.mae !== undefined && (
+                          <div className={`${darkMode ? "bg-slate-900/50 border-white/5" : "bg-white border-gray-100"} p-3 rounded-lg border`}>
+                            <p className={`text-[10px] uppercase font-black ${darkMode ? "text-slate-500" : "text-gray-600"}`}>MAE</p>
+                            <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{forecastResult.metrics.mae.toFixed(2)}</p>
+                          </div>
+                        )}
+                        {forecastResult.metrics.mape !== undefined && (
+                          <div className={`${darkMode ? "bg-slate-900/50 border-white/5" : "bg-white border-gray-100"} p-3 rounded-lg border`}>
+                            <p className={`text-[10px] uppercase font-black ${darkMode ? "text-slate-500" : "text-gray-600"}`}>MAPE</p>
+                            <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{forecastResult.metrics.mape.toFixed(2)}%</p>
+                          </div>
+                        )}
+                        {forecastResult.metrics.accuracy !== undefined && (
+                          <div className={`${darkMode ? "bg-slate-900/50 border-white/5" : "bg-white border-gray-100"} p-3 rounded-lg border`}>
+                            <p className={`text-[10px] uppercase font-black ${darkMode ? "text-slate-500" : "text-gray-600"}`}>Accuracy</p>
+                            <p className={`text-xl font-black ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>{forecastResult.metrics.accuracy?.toFixed(1)}%</p>
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    <div>
-                      <ReactApexChart
-                        options={forecastChart.options}
-                        series={forecastChart.series}
-                        type="line"
-                        height={400}
-                      />
+                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors shadow-sm`}>
+                      <ReactApexChart options={forecastChart.options} series={forecastChart.series} type="line" height={400} />
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border overflow-hidden transition-colors`}>
+                      <table className={`min-w-full divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
+                        <thead className={darkMode ? "bg-slate-800/50" : "bg-gray-50"}>
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                            <th className={`px-6 py-3 text-left text-xs font-black ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Period</th>
+                            <th className={`px-6 py-3 text-left text-xs font-black ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Predicted Value</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className={`${darkMode ? "bg-slate-900" : "bg-white"} divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
                           {forecastResult.forecast_data.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <tr key={idx} className={`${darkMode ? "hover:bg-slate-800/50" : "hover:bg-gray-50"} transition-colors`}>
+                              <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-900"}`}>
                                 {formatPeriod(item, forecastResult.forecast_mode || 'weekly')}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${darkMode ? "text-green-400" : "text-green-700"}`}>
                                 {item.value.toFixed(2)} {forecastResult.data_type === 'price' ? '₱' : 'Kg'}
                               </td>
                             </tr>
@@ -2162,10 +2303,10 @@ CONFIG = {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12">
+                  <div className={`${darkMode ? "bg-slate-800/50 text-slate-400" : "bg-gray-50 text-gray-600"} text-center py-12 rounded-lg`}>
                     <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Forecast Generated Yet</h3>
-                    <p className="text-gray-600">Select forecast parameters and click "Generate" to see predictions</p>
+                    <h3 className={`text-xl font-semibold ${darkMode ? "text-white" : "text-gray-900"} mb-2`}>No Forecast Generated Yet</h3>
+                    <p className={`${darkMode ? "text-slate-400" : "text-gray-600"}`}>Select forecast parameters and click "Generate" to see predictions</p>
                   </div>
                 )}
               </div>

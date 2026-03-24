@@ -91,31 +91,34 @@ const Sidebar = () => {
         initial={false}
         animate={{ width: collapsed ? collapsedWidth : expandedWidth }}
         transition={{ type: "spring", stiffness: 260, damping: 30 }}
-        className="bg-green-700 text-white fixed top-0 left-0 h-screen p-4 flex flex-col border-r border-gray-700 box-border overflow-visible z-40"
+        className="bg-green-700 dark:bg-slate-900 text-white fixed top-0 left-0 h-screen p-4 flex flex-col border-r border-gray-700 dark:border-slate-800 box-border overflow-visible z-50 transition-colors duration-300"
         aria-expanded={!collapsed}
       >
         {/* Logo & Title */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center mb-8 h-16">
+          <div className="flex items-center gap-4 w-full">
             <div
-              className={`flex-shrink-0 ${collapsed ? "w-8 h-8" : "w-12 h-12"
-                } flex items-center justify-center`}
+              className={`flex-shrink-0 ${collapsed ? "w-10 h-10" : "w-14 h-14"} flex items-center justify-center transition-all duration-300 bg-white/10 rounded-xl p-1.5 shadow-lg shadow-green-900/20 border border-white/5`}
             >
               <img
                 src="/logo.png"
                 alt="Logo"
-                className={`${collapsed ? "w-8 h-8" : "w-12 h-12"} object-contain`}
+                className="w-full h-full object-contain filter drop-shadow-md"
               />
             </div>
 
             <motion.div
               initial={false}
               animate={{ opacity: collapsed ? 0 : 1 }}
-              className="ml-2 overflow-hidden whitespace-nowrap flex flex-col justify-center"
+              className="overflow-hidden flex flex-col justify-center whitespace-nowrap"
               style={{ width: collapsed ? 0 : "auto" }}
             >
-              <span className="font-bold text-lg tracking-wide">AgriMap Admin</span>
-              <span className="text-xs text-green-200 mt-0.5 opacity-90">Logged as: {userName}</span>
+              <span className="font-bold text-[19px] tracking-tight leading-none text-white drop-shadow-sm">
+                AgriMap
+              </span>
+              <span className="text-[10px] font-semibold tracking-wider uppercase text-green-100/70 mt-1 leading-none">
+                Canlaon City Agriculture
+              </span>
             </motion.div>
           </div>
         </div>
@@ -129,7 +132,7 @@ const Sidebar = () => {
           }}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand" : "Collapse"}
-          className="absolute -right-4 top-4 z-50 bg-green-700 text-white p-1.5 rounded-full shadow-md hover:bg-green-800 transition flex items-center justify-center"
+          className="absolute -right-4 top-4 z-[60] bg-green-700 dark:bg-slate-800 text-white p-1.5 rounded-full shadow-md hover:bg-green-800 dark:hover:bg-slate-700 transition flex items-center justify-center border border-green-600 dark:border-slate-700"
           style={{ width: 36, height: 36 }}
         >
           {collapsed ? (
@@ -227,7 +230,7 @@ const Sidebar = () => {
                             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zM9 19V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2" />
                             </svg>
-                            <span className="text-xs">Dashboard</span>
+                            <span className="text-xs"> Farmer Dashboard</span>
                           </motion.div>
                         )}
                       </NavLink>
@@ -345,7 +348,7 @@ const Sidebar = () => {
               </AnimatePresence>
             </motion.li>
 
-            <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">APPS</li>
+            <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">APP</li>
 
             {/* Farmer Profile */}
             <motion.li variants={itemVariants} initial="initial" whileHover="hover">
@@ -422,6 +425,29 @@ const Sidebar = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
                     <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>Farmer Registration</span>
+                  </motion.div>
+                )}
+              </NavLink>
+            </motion.li>
+
+            <li className="text-xs text-gray-200/70 font-semibold mb-2 mt-4">ACCOUNT</li>
+
+            {/* My Account */}
+            <motion.li variants={itemVariants} initial="initial" whileHover="hover">
+              <NavLink
+                to="/home/account"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 p-1.5 rounded text-sm hover:bg-green-800 ${isActive ? "bg-green-600" : ""}`
+                }
+                onMouseEnter={() => setTooltip(collapsed ? "account" : null)}
+                onMouseLeave={() => setTooltip(null)}
+              >
+                {({ isActive }) => (
+                  <motion.div variants={itemVariants} animate={isActive ? "active" : "initial"} className="flex items-center gap-2 w-full">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className={`${collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"}`}>My Account</span>
                   </motion.div>
                 )}
               </NavLink>
@@ -566,14 +592,14 @@ const Sidebar = () => {
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="bg-white bg-opacity-95 text-black p-6 rounded-2xl shadow-lg max-w-md w-full mx-4"
+              className="bg-white dark:bg-slate-900 text-black dark:text-white p-6 rounded-2xl shadow-lg max-w-md w-full mx-4 border border-transparent dark:border-slate-800"
               variants={popupVariants}
               initial="hidden"
               animate="visible"
               exit="hidden"
             >
-              <h2 className="text-2xl font-bold mb-4 text-center">Logout</h2>
-              <p className="text-center mb-6">Are you sure you want to log out?</p>
+              <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-white">Logout</h2>
+              <p className="text-center mb-6 text-gray-600 dark:text-gray-400">Are you sure you want to log out?</p>
               <div className="flex justify-center gap-4">
                 <button
                   onClick={handleLogout}
@@ -584,7 +610,7 @@ const Sidebar = () => {
                 </button>
                 <button
                   onClick={handleCancelLogout}
-                  className="bg-gray-300 text-black px-4 py-2 rounded-lg hover:bg-gray-400 transition"
+                  className="bg-gray-100 dark:bg-slate-800 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition border border-gray-200 dark:border-slate-700"
                 >
                   Cancel
                 </button>

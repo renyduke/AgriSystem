@@ -134,12 +134,12 @@ export function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 py-8 px-4">
-      {/* Animated Background Elements */}
+    <div className="min-h-screen bg-white dark:bg-slate-950 transition-colors duration-300 py-8 px-4">
+      {/* Animated Background Elements - Subtle in Dark Mode */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-green-200 dark:bg-green-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob"></div>
+        <div className="absolute top-40 right-10 w-72 h-72 bg-emerald-200 dark:bg-emerald-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-20 left-1/2 w-72 h-72 bg-teal-200 dark:bg-teal-900/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 dark:opacity-20 animate-blob animation-delay-4000"></div>
       </div>
 
       {/* Success/Error Toast Notification */}
@@ -147,15 +147,15 @@ export function SignUp() {
         <div
           className={`fixed top-6 right-6 p-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in-right backdrop-blur-sm max-w-sm ${
             localReply.type === "success" 
-              ? "bg-green-50 text-green-800 border-2 border-green-200" 
-              : "bg-red-50 text-red-800 border-2 border-red-200"
+              ? "bg-green-50 dark:bg-green-900/90 text-green-800 dark:text-green-100 border-2 border-green-200 dark:border-green-800" 
+              : "bg-red-50 dark:bg-red-900/90 text-red-800 dark:text-red-100 border-2 border-red-200 dark:border-red-800"
           }`}
         >
-          <div className={`p-2 rounded-full ${localReply.type === "success" ? "bg-green-100" : "bg-red-100"}`}>
+          <div className={`p-2 rounded-full ${localReply.type === "success" ? "bg-green-100 dark:bg-green-800" : "bg-red-100 dark:bg-red-800"}`}>
             {localReply.type === "success" ? (
-              <FaCheckCircle className="text-green-600 text-xl" />
+              <FaCheckCircle className="text-green-600 dark:text-green-400 text-xl" />
             ) : (
-              <FaTimes className="text-red-600 text-xl" />
+              <FaTimes className="text-red-600 dark:text-red-400 text-xl" />
             )}
           </div>
           <span className="font-medium">{localReply.message}</span>
@@ -165,9 +165,9 @@ export function SignUp() {
       {/* Main Card Container - Compact Design */}
       <div className="max-w-md mx-auto">
         <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 animate-pulse-slow"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur-xl opacity-20 dark:opacity-10 animate-pulse-slow"></div>
           
-          <div className="relative bg-white/95 backdrop-blur-xl shadow-2xl rounded-3xl p-6 border border-white/20">
+          <div className="relative bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl rounded-3xl p-6 border border-white/20 dark:border-slate-800 transition-colors">
             {/* Logo and Header */}
             <div className="text-center mb-6">
              <div className="inline-flex items-center justify-center mb-4">
@@ -178,18 +178,18 @@ export function SignUp() {
   />
 </div>
 
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400 bg-clip-text text-transparent mb-1">
                 Admin Registration
               </h2>
-              <p className="text-gray-500 text-sm">Create administrator account</p>
+              <p className="text-gray-500 dark:text-slate-400 text-sm">Create administrator account</p>
             </div>
 
             {/* Error Alert */}
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg animate-shake">
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg animate-shake">
                 <div className="flex items-start">
                   <FaTimes className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                  <p className="text-red-700 text-sm font-medium">{error}</p>
+                  <p className="text-red-700 dark:text-red-300 text-sm font-medium">{error}</p>
                 </div>
               </div>
             )}
@@ -198,7 +198,7 @@ export function SignUp() {
             <div className="space-y-4">
               {/* Full Name Input */}
               <div className="space-y-1">
-                <label htmlFor="fullName" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <label htmlFor="fullName" className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
                   Full Name
                 </label>
                 <div className="relative">
@@ -212,10 +212,10 @@ export function SignUp() {
                     name="fullName"
                     type="text"
                     placeholder="John Doe"
-                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm text-slate-700 dark:text-slate-200 ${
                       focusedInput === 'fullName'
-                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-green-500 bg-white dark:bg-slate-800 shadow-md shadow-green-100 dark:shadow-green-900/20'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                     value={formData.fullName}
                     onChange={handleChange}
@@ -229,7 +229,7 @@ export function SignUp() {
 
               {/* Email Input */}
               <div className="space-y-1">
-                <label htmlFor="email" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <label htmlFor="email" className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
                   Email Address
                 </label>
                 <div className="relative">
@@ -243,10 +243,10 @@ export function SignUp() {
                     name="email"
                     type="email"
                     placeholder="admin@example.com"
-                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm text-slate-700 dark:text-slate-200 ${
                       focusedInput === 'email'
-                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-green-500 bg-white dark:bg-slate-800 shadow-md shadow-green-100 dark:shadow-green-900/20'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                     value={formData.email}
                     onChange={handleChange}
@@ -260,7 +260,7 @@ export function SignUp() {
 
               {/* Password Input */}
               <div className="space-y-1">
-                <label htmlFor="password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <label htmlFor="password" className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
                   Password
                 </label>
                 <div className="relative">
@@ -274,10 +274,10 @@ export function SignUp() {
                     name="password"
                     type={passwordShown ? "text" : "password"}
                     placeholder="••••••"
-                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
+                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm text-slate-700 dark:text-slate-200 ${
                       focusedInput === 'password'
-                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-green-500 bg-white dark:bg-slate-800 shadow-md shadow-green-100 dark:shadow-green-900/20'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                     value={formData.password}
                     onChange={handleChange}
@@ -300,7 +300,7 @@ export function SignUp() {
 
               {/* Confirm Password Input */}
               <div className="space-y-1">
-                <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
                   Confirm Password
                 </label>
                 <div className="relative">
@@ -314,10 +314,10 @@ export function SignUp() {
                     name="confirmPassword"
                     type={confirmPasswordShown ? "text" : "password"}
                     placeholder="••••••"
-                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
+                    className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm text-slate-700 dark:text-slate-200 ${
                       focusedInput === 'confirmPassword'
-                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-green-500 bg-white dark:bg-slate-800 shadow-md shadow-green-100 dark:shadow-green-900/20'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                     value={formData.confirmPassword}
                     onChange={handleChange}
@@ -340,7 +340,7 @@ export function SignUp() {
 
               {/* Admin Registration Key */}
               <div className="space-y-1">
-                <label htmlFor="registrationKey" className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <label htmlFor="registrationKey" className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
                   Admin Key
                 </label>
                 <div className="relative">
@@ -354,10 +354,10 @@ export function SignUp() {
                     name="registrationKey"
                     type="text"
                     placeholder="Enter admin key"
-                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm ${
+                    className={`w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-800 border-2 rounded-xl focus:outline-none transition-all duration-200 text-sm text-slate-700 dark:text-slate-200 ${
                       focusedInput === 'registrationKey'
-                        ? 'border-green-500 bg-white shadow-md shadow-green-100'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-green-500 bg-white dark:bg-slate-800 shadow-md shadow-green-100 dark:shadow-green-900/20'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
                     }`}
                     value={formData.registrationKey}
                     onChange={handleChange}
@@ -397,12 +397,12 @@ export function SignUp() {
             </div>
 
             {/* Footer */}
-            <div className="mt-6 pt-5 border-t border-gray-200">
-              <p className="text-center text-xs text-gray-600">
+            <div className="mt-6 pt-5 border-t border-gray-200 dark:border-slate-800">
+              <p className="text-center text-xs text-gray-600 dark:text-slate-400">
                 Already have an account?{" "}
                 <button 
                   onClick={navigateToSignIn}
-                  className="text-green-600 hover:text-green-700 font-semibold hover:underline transition-colors"
+                  className="text-green-600 dark:text-green-500 hover:text-green-700 dark:hover:text-green-400 font-semibold hover:underline transition-colors"
                   disabled={loading}
                 >
                   Sign In

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/adminComponents/Sidebar";
+import Header from "../components/adminComponents/Header";
 import { Outlet } from "react-router-dom";
 
 const AdminLayout = () => {
@@ -19,32 +20,36 @@ const AdminLayout = () => {
     );
   }, [collapsed]);
 
-  // header height if you have fixed header; 0 if none
-  const headerHeight = 0;
+  // header height if you have fixed header; 64 for h-16
+  const headerHeight = 64;
 
   return (
-    <div className="min-h-screen">
-      {/* If you have a Header, put it here */}
-      {/* <Header collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} /> */}
-
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
 
-      {/* main: no page-level scrollbar visible (inner wrapper scrolls) */}
-      <main
-        className="transition-all duration-200"
-        style={{
-          marginLeft: "var(--sidebar-width, 240px)",
-          padding: "1.5rem",
-          minHeight: `calc(100vh - ${headerHeight}px)`,
-          boxSizing: "border-box",
-          overflow: "hidden",
-        }}
+      {/* Main content wrapper pushes right based on sidebar width */}
+      <div 
+        className="flex-1 flex flex-col transition-all duration-200"
+        style={{ marginLeft: "var(--sidebar-width, 240px)" }}
       >
-        {/* inner scrollable area with hidden scrollbar using Tailwind arbitrary selectors */}
-        <div className="h-full min-h-[calc(100vh-0px)] overflow-y-scroll [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <Outlet />
-        </div>
-      </main>
+        <Header />
+
+        {/* main: no page-level scrollbar visible (inner wrapper scrolls) */}
+        <main
+          className="flex-1"
+          style={{
+            padding: "0",
+            height: `calc(100vh - ${headerHeight}px)`,
+            boxSizing: "border-box",
+            overflow: "hidden",
+          }}
+        >
+          {/* inner scrollable area with hidden scrollbar using Tailwind arbitrary selectors */}
+          <div className="h-full overflow-y-scroll [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

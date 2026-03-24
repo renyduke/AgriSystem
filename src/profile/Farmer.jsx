@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../config/firebaseConfig";
+import { useTheme } from "../context/ThemeContext";
 import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc } from "firebase/firestore";
+import { logActivity } from "../services/activityLogger";
 import { FaSearch, FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaEdit, FaTrash, FaList, FaTh, FaPlus, FaTimes, FaCalendarAlt, FaInfoCircle, FaSave, FaBan, FaFilter, FaUserCircle, FaLocationArrow, FaCrop } from "react-icons/fa";
 import { Link, useParams } from "react-router-dom";
 import canlaonLocations from "../data/canlaonLocations";
 import axios from 'axios';
 
 const Farmer = () => {
+  const { darkMode } = useTheme();
   const { id } = useParams();
   const [farmers, setFarmers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -24,6 +27,8 @@ const Farmer = () => {
   const [updateHighlights, setUpdateHighlights] = useState({});
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hoveredFarmer, setHoveredFarmer] = useState(null);
+  const hoverTimeoutRef = React.useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -325,6 +330,7 @@ const Farmer = () => {
       setFarmerVegetables([]);
       setOriginalVegetables([]);
       setUpdateHighlights({});
+      logActivity('update', 'Farmer', editForm.fullName);
       alert("Farmer updated successfully!");
     } catch (error) {
       console.error("Error updating farmer:", error);
@@ -346,6 +352,8 @@ const Farmer = () => {
         );
         await Promise.all(deletePromises);
         setFarmers((prev) => prev.filter((farmer) => farmer.id !== farmerId));
+        const deletedFarmer = farmers.find((f) => f.id === farmerId);
+        logActivity('delete', 'Farmer', deletedFarmer?.fullName || farmerId);
         alert("Farmer deleted successfully!");
       } catch (error) {
         console.error("Error deleting farmer:", error);
@@ -356,33 +364,33 @@ const Farmer = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-white text-gray-900"} flex items-center justify-center`}>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading farmer profiles...</p>
+          <div className={`w-16 h-16 border-4 ${darkMode ? "border-slate-800 border-t-green-500" : "border-green-200 border-t-green-600"} rounded-full animate-spin mx-auto mb-4`}></div>
+          <p className={darkMode ? "text-slate-400" : "text-gray-600"}>Loading farmer profiles...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${darkMode ? "bg-slate-950" : "bg-gray-50"} transition-colors duration-300`}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100"} border-b transition-colors duration-300`}>
+        <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
                 <FaUserCircle className="text-white text-lg" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">Farmer Profiles</h1>
-                <p className="text-xs text-gray-500">{farmers.length} registered farmers</p>
+                <h1 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>Farmer Profiles</h1>
+                <p className={`text-xs ${darkMode ? "text-slate-400" : "text-gray-500"}`}>{farmers.length} registered farmers</p>
               </div>
             </div>
             <Link
               to="/home/maps"
-              className="px-4 py-2 bg-white text-green-600 rounded-lg hover:bg-gray-50 flex items-center border border-green-600 hover:border-green-700 transition-colors"
+              className={`px-4 py-2 ${darkMode ? "bg-slate-800 text-green-400 border-slate-700 hover:bg-slate-700" : "bg-white text-green-600 border-green-600 hover:bg-gray-50"} rounded-lg flex items-center border transition-colors`}
             >
               <FaLocationArrow className="mr-2" />
               View Map
@@ -392,13 +400,13 @@ const Farmer = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-6 pt-2 pb-8">
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className={`${darkMode ? "bg-slate-900 border-slate-800 shadow-xl" : "bg-white border-gray-200"} rounded-xl border p-6 mb-6 transition-colors duration-300`}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <FaSearch className="mr-2 text-gray-400" />
+              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-700"} mb-2 flex items-center`}>
+                <FaSearch className={`mr-2 ${darkMode ? "text-slate-500" : "text-gray-400"}`} />
                 Search Farmers
               </label>
               <div className="relative">
@@ -407,24 +415,24 @@ const Farmer = () => {
                   placeholder="Search by name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:ring-green-600" : "bg-white border-gray-300 text-gray-900 focus:ring-green-500"} border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <FaFilter className="mr-2 text-gray-400" />
+              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-700"} mb-2 flex items-center`}>
+                <FaFilter className={`mr-2 ${darkMode ? "text-slate-500" : "text-gray-400"}`} />
                 Filter by Location
               </label>
               <select
                 value={locationFilter}
                 onChange={(e) => setLocationFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className={`w-full px-4 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-green-600" : "bg-white border-gray-300 text-gray-900 focus:ring-green-500"} border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
               >
-                <option value="">All Locations</option>
+                <option value="" className={darkMode ? "bg-slate-800" : ""}>All Locations</option>
                 {uniqueLocations.map((location) => (
-                  <option key={location} value={location}>
+                  <option key={location} value={location} className={darkMode ? "bg-slate-800" : ""}>
                     {location}
                   </option>
                 ))}
@@ -432,15 +440,15 @@ const Farmer = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-700"} mb-2`}>
                 View Mode
               </label>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setViewMode("card")}
-                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "card"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-all ${viewMode === "card"
+                    ? "bg-green-600 text-white shadow-lg shadow-green-900/20"
+                    : darkMode ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
                   <FaTh />
@@ -448,9 +456,9 @@ const Farmer = () => {
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors ${viewMode === "list"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-all ${viewMode === "list"
+                    ? "bg-green-600 text-white shadow-lg shadow-green-900/20"
+                    : darkMode ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
                   <FaList />
@@ -461,7 +469,7 @@ const Farmer = () => {
           </div>
 
           <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>
+            <span className={darkMode ? "text-slate-500" : ""}>
               Showing {filteredFarmers.length} of {farmers.length} farmers
             </span>
             {searchQuery || locationFilter ? (
@@ -470,7 +478,7 @@ const Farmer = () => {
                   setSearchQuery("");
                   setLocationFilter("");
                 }}
-                className="text-green-600 hover:text-green-700 flex items-center"
+                className="text-green-600 hover:text-green-700 flex items-center font-medium"
               >
                 <FaTimes className="mr-1" />
                 Clear filters
@@ -485,43 +493,43 @@ const Farmer = () => {
             {filteredFarmers.map((farmer) => (
               <div
                 key={farmer.id}
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+                className={`${darkMode ? "bg-slate-900 border-slate-800 shadow-xl" : "bg-white border-gray-200"} rounded-xl border overflow-hidden hover:shadow-2xl transition-all duration-300`}
               >
                 {/* Profile Header */}
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 border-b border-gray-100">
+                <div className={`${darkMode ? "bg-slate-800/50 border-slate-700" : "bg-gradient-to-r from-green-50 to-emerald-50 border-gray-100"} p-6 border-b transition-colors duration-300`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-14 h-14 bg-green-600 rounded-full flex items-center justify-center">
+                      <div className="w-14 h-14 bg-green-600 rounded-full flex items-center justify-center shadow-lg shadow-green-900/10">
                         <FaUser className="text-white text-xl" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900 text-lg">
+                        <h3 className={`font-semibold ${darkMode ? "text-white" : "text-gray-900"} text-lg`}>
                           {editingFarmer === farmer.id ? (
                             <input
                               type="text"
                               name="fullName"
                               value={editForm.fullName}
                               onChange={handleEditChange}
-                              className={`text-lg font-semibold border rounded px-2 py-1 w-full ${updateHighlights.fullName ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              className={`text-lg font-semibold border rounded px-2 py-1 w-full ${updateHighlights.fullName ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                             />
                           ) : (
                             farmer.fullName
                           )}
                         </h3>
-                        <p className="text-sm text-gray-600">Farmer ID: {farmer.id.slice(0, 8)}</p>
+                        <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Farmer ID: {farmer.id.slice(0, 8)}</p>
                       </div>
                     </div>
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEdit(farmer)}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        className={`p-2 ${darkMode ? "text-slate-400 hover:text-green-400 hover:bg-slate-700" : "text-gray-400 hover:text-green-600 hover:bg-green-50"} rounded-lg transition-colors`}
                         title="Edit"
                       >
                         <FaEdit />
                       </button>
                       <button
                         onClick={() => handleDelete(farmer.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className={`p-2 ${darkMode ? "text-slate-400 hover:text-red-400 hover:bg-slate-700" : "text-gray-400 hover:text-red-600 hover:bg-red-50"} rounded-lg transition-colors`}
                         title="Delete"
                       >
                         <FaTrash />
@@ -535,44 +543,44 @@ const Farmer = () => {
                   <div className="space-y-4">
                     {/* Contact */}
                     <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <FaPhone className="text-blue-600" />
+                      <div className={`w-8 h-8 ${darkMode ? "bg-blue-900/20" : "bg-blue-50"} rounded-lg flex items-center justify-center`}>
+                        <FaPhone className={darkMode ? "text-blue-400" : "text-blue-600"} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500">Contact</p>
+                        <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Contact</p>
                         {editingFarmer === farmer.id ? (
                           <input
                             type="text"
                             name="contact"
                             value={editForm.contact}
                             onChange={handleEditChange}
-                            className={`w-full border rounded px-3 py-1 ${updateHighlights.contact ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            className={`w-full border rounded px-3 py-1 ${updateHighlights.contact ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                             placeholder="09123456789"
                           />
                         ) : (
-                          <p className="text-gray-900">{farmer.contact}</p>
+                          <p className={darkMode ? "text-slate-200" : "text-gray-900"}>{farmer.contact}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Address */}
                     <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                        <FaMapMarkerAlt className="text-green-600" />
+                      <div className={`w-8 h-8 ${darkMode ? "bg-green-900/20" : "bg-green-50"} rounded-lg flex items-center justify-center`}>
+                        <FaMapMarkerAlt className={darkMode ? "text-green-400" : "text-green-600"} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500">Address</p>
+                        <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Address</p>
                         {editingFarmer === farmer.id ? (
                           <div className="space-y-2">
                             <select
                               name="addressBarangay"
                               value={editForm.addressBarangay}
                               onChange={handleEditChange}
-                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                             >
-                              <option value="">Select Barangay</option>
+                              <option value="" className={darkMode ? "bg-slate-800" : ""}>Select Barangay</option>
                               {Object.keys(canlaonLocations).map((barangay) => (
-                                <option key={barangay} value={barangay}>
+                                <option key={barangay} value={barangay} className={darkMode ? "bg-slate-800" : ""}>
                                   {barangay}
                                 </option>
                               ))}
@@ -581,42 +589,42 @@ const Farmer = () => {
                               name="addressSitio"
                               value={editForm.addressSitio}
                               onChange={handleEditChange}
-                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.address ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                               disabled={!selectedAddressBarangay}
                             >
-                              <option value="">Select Sitio</option>
+                              <option value="" className={darkMode ? "bg-slate-800" : ""}>Select Sitio</option>
                               {selectedAddressBarangay &&
                                 canlaonLocations[selectedAddressBarangay].sitios.map((sitio) => (
-                                  <option key={sitio.name} value={sitio.name}>
+                                  <option key={sitio.name} value={sitio.name} className={darkMode ? "bg-slate-800" : ""}>
                                     {sitio.name}
                                   </option>
                                 ))}
                             </select>
                           </div>
                         ) : (
-                          <p className="text-gray-900">{farmer.address}</p>
+                          <p className={darkMode ? "text-slate-200" : "text-gray-900"}>{farmer.address}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Farm Details */}
                     <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
-                        <FaTractor className="text-amber-600" />
+                      <div className={`w-8 h-8 ${darkMode ? "bg-amber-900/20" : "bg-amber-50"} rounded-lg flex items-center justify-center`}>
+                        <FaTractor className={darkMode ? "text-amber-400" : "text-amber-600"} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500">Farm Location</p>
+                        <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Farm Location</p>
                         {editingFarmer === farmer.id ? (
                           <div className="space-y-2">
                             <select
                               name="farmBarangay"
                               value={editForm.farmBarangay}
                               onChange={handleEditChange}
-                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                             >
-                              <option value="">Select Barangay</option>
+                              <option value="" className={darkMode ? "bg-slate-800" : ""}>Select Barangay</option>
                               {Object.keys(canlaonLocations).map((barangay) => (
-                                <option key={barangay} value={barangay}>
+                                <option key={barangay} value={barangay} className={darkMode ? "bg-slate-800" : ""}>
                                   {barangay}
                                 </option>
                               ))}
@@ -625,31 +633,31 @@ const Farmer = () => {
                               name="farmSitio"
                               value={editForm.farmSitio}
                               onChange={handleEditChange}
-                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                              className={`w-full border rounded px-3 py-1 ${updateHighlights.farmLocation ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                               disabled={!selectedFarmBarangay}
                             >
-                              <option value="">Select Sitio</option>
+                              <option value="" className={darkMode ? "bg-slate-800" : ""}>Select Sitio</option>
                               {selectedFarmBarangay &&
                                 canlaonLocations[selectedFarmBarangay].sitios.map((sitio) => (
-                                  <option key={sitio.name} value={sitio.name}>
+                                  <option key={sitio.name} value={sitio.name} className={darkMode ? "bg-slate-800" : ""}>
                                     {sitio.name}
                                   </option>
                                 ))}
                             </select>
                           </div>
                         ) : (
-                          <p className="text-gray-900">{farmer.farmLocation}</p>
+                          <p className={darkMode ? "text-slate-200" : "text-gray-900"}>{farmer.farmLocation}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Farm Size */}
                     <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-                        <FaTractor className="text-purple-600" />
+                      <div className={`w-8 h-8 ${darkMode ? "bg-purple-900/20" : "bg-purple-50"} rounded-lg flex items-center justify-center`}>
+                        <FaTractor className={darkMode ? "text-purple-400" : "text-purple-600"} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500">Farm Size</p>
+                        <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Farm Size</p>
                         {editingFarmer === farmer.id ? (
                           <input
                             type="number"
@@ -658,74 +666,74 @@ const Farmer = () => {
                             onChange={handleEditChange}
                             step="0.01"
                             min="0"
-                            className={`w-full border rounded px-3 py-1 ${updateHighlights.hectares ? "bg-yellow-50 border-yellow-200" : "border-gray-300"}`}
+                            className={`w-full border rounded px-3 py-1 ${updateHighlights.hectares ? (darkMode ? "bg-yellow-900/20 border-yellow-700 text-yellow-100" : "bg-yellow-50 border-yellow-200") : (darkMode ? "bg-slate-800 border-slate-700 text-white" : "border-gray-300")}`}
                           />
                         ) : (
-                          <p className="text-gray-900">{farmer.hectares || "0"} hectares</p>
+                          <p className={darkMode ? "text-slate-200" : "text-gray-900"}>{farmer.hectares || "0"} hectares</p>
                         )}
                       </div>
                     </div>
 
                     {/* Crops Section */}
-                    <div className="border-t border-gray-100 pt-4 mt-4">
+                    <div className={`${darkMode ? "border-slate-800" : "border-gray-100"} border-t pt-4 mt-4 transition-colors`}>
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-sm font-medium text-gray-900 flex items-center">
+                        <p className={`text-sm font-medium ${darkMode ? "text-white" : "text-gray-900"} flex items-center`}>
                           <FaCrop className="mr-2 text-green-600" />
                           Current Crops
                         </p>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                        <span className={`${darkMode ? "bg-green-600/20 text-green-400" : "bg-green-100 text-green-700"} text-xs px-2 py-1 rounded-full font-medium`}>
                           {farmer.mainCrops?.length || 0} crops
                         </span>
                       </div>
 
                       {editingFarmer === farmer.id ? (
-                        <div className={`space-y-3 ${updateHighlights.crops ? "bg-yellow-50 p-3 rounded-lg" : ""}`}>
+                        <div className={`space-y-3 ${updateHighlights.crops ? (darkMode ? "bg-yellow-900/10 p-3 rounded-lg" : "bg-yellow-50 p-3 rounded-lg") : ""}`}>
                           {farmerVegetables.map((crop, index) => {
                             const oldCrop = originalVegetables[index];
                             const isChanged = oldCrop && (crop.name !== oldCrop.name || crop.plantingDate !== oldCrop.plantingDate || crop.harvestDate !== oldCrop.harvestDate);
                             const isNew = !oldCrop;
 
                             return (
-                              <div key={index} className={`p-3 rounded-lg border ${isChanged || isNew ? "border-yellow-200 bg-yellow-50" : "border-gray-200"}`}>
+                              <div key={index} className={`p-3 rounded-lg border ${isChanged || isNew ? (darkMode ? "border-yellow-700 bg-yellow-900/20" : "border-yellow-200 bg-yellow-50") : (darkMode ? "border-slate-700 bg-slate-800" : "border-gray-200")}`}>
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
-                                    <label className="text-xs text-gray-500">Crop</label>
+                                    <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Crop</label>
                                     <select
                                       value={crop.name}
                                       onChange={(e) => updateCrop(index, "name", e.target.value)}
-                                      className="w-full text-sm border rounded px-2 py-1"
+                                      className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-white border-gray-300"}`}
                                     >
-                                      <option value="">Select</option>
+                                      <option value="" className={darkMode ? "bg-slate-800" : ""}>Select</option>
                                       {vegetables.map((veg) => (
-                                        <option key={veg.id} value={veg.name}>
+                                        <option key={veg.id} value={veg.name} className={darkMode ? "bg-slate-800" : ""}>
                                           {veg.name}
                                         </option>
                                       ))}
                                     </select>
                                   </div>
                                   <div>
-                                    <label className="text-xs text-gray-500">Planting</label>
+                                    <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Planting</label>
                                     <input
                                       type="date"
                                       value={crop.plantingDate}
                                       onChange={(e) => updateCrop(index, "plantingDate", e.target.value)}
-                                      className="w-full text-sm border rounded px-2 py-1"
+                                      className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white fill-white" : "bg-white border-gray-300"}`}
                                     />
                                   </div>
                                   <div>
-                                    <label className="text-xs text-gray-500">Harvest</label>
+                                    <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Harvest</label>
                                     <input
                                       type="date"
                                       value={crop.harvestDate}
                                       onChange={(e) => updateCrop(index, "harvestDate", e.target.value)}
-                                      className="w-full text-sm border rounded px-2 py-1"
+                                      className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white fill-white" : "bg-white border-gray-300"}`}
                                     />
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between mt-2">
                                   <button
                                     onClick={() => removeCrop(crop.id, index)}
-                                    className="text-xs text-red-600 hover:text-red-700 flex items-center"
+                                    className={`text-xs ${darkMode ? "text-red-400 hover:text-red-300" : "text-red-600 hover:text-red-700"} flex items-center font-medium`}
                                   >
                                     <FaTimes className="mr-1" />
                                     Remove
@@ -736,48 +744,48 @@ const Farmer = () => {
                           })}
 
                           {/* Add New Crop */}
-                          <div className="border border-dashed border-gray-300 rounded-lg p-3">
+                          <div className={`border border-dashed ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-gray-300 bg-gray-50/50"} rounded-lg p-3 transition-colors`}>
                             <div className="grid grid-cols-3 gap-2 mb-2">
                               <div>
-                                <label className="text-xs text-gray-500">New Crop</label>
+                                <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>New Crop</label>
                                 <select
                                   name="name"
                                   value={newCrop.name}
                                   onChange={handleNewCropChange}
-                                  className="w-full text-sm border rounded px-2 py-1"
+                                  className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-white border-gray-300"}`}
                                 >
-                                  <option value="">Select</option>
+                                  <option value="" className={darkMode ? "bg-slate-800" : ""}>Select</option>
                                   {vegetables.map((veg) => (
-                                    <option key={veg.id} value={veg.name}>
+                                    <option key={veg.id} value={veg.name} className={darkMode ? "bg-slate-800" : ""}>
                                       {veg.name}
                                     </option>
                                   ))}
                                 </select>
                               </div>
                               <div>
-                                <label className="text-xs text-gray-500">Planting</label>
+                                <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Planting</label>
                                 <input
                                   type="date"
                                   name="plantingDate"
                                   value={newCrop.plantingDate}
                                   onChange={handleNewCropChange}
-                                  className="w-full text-sm border rounded px-2 py-1"
+                                  className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white fill-white" : "bg-white border-gray-300"}`}
                                 />
                               </div>
                               <div>
-                                <label className="text-xs text-gray-500">Harvest</label>
+                                <label className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Harvest</label>
                                 <input
                                   type="date"
                                   name="harvestDate"
                                   value={newCrop.harvestDate}
                                   onChange={handleNewCropChange}
-                                  className="w-full text-sm border rounded px-2 py-1"
+                                  className={`w-full text-sm border rounded px-2 py-1 ${darkMode ? "bg-slate-700 border-slate-600 text-white fill-white" : "bg-white border-gray-300"}`}
                                 />
                               </div>
                             </div>
                             <button
                               onClick={addCrop}
-                              className="w-full text-green-600 hover:text-green-700 text-sm flex items-center justify-center border border-green-600 rounded px-3 py-1 hover:bg-green-50 transition-colors"
+                              className={`w-full ${darkMode ? "text-green-400 border-green-400/50 hover:bg-green-400/10" : "text-green-600 border-green-600 hover:bg-green-50"} text-sm flex items-center justify-center border rounded px-3 py-1.5 transition-all font-medium`}
                             >
                               <FaPlus className="mr-2" />
                               Add Crop
@@ -788,14 +796,14 @@ const Farmer = () => {
                         <div className="space-y-2">
                           {farmer.mainCrops?.length > 0 ? (
                             farmer.mainCrops.map((crop, index) => (
-                              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                              <div key={index} className={`flex items-center justify-between p-2.5 ${darkMode ? "bg-slate-800 shadow-inner" : "bg-gray-50"} rounded-lg transition-colors`}>
                                 <div>
-                                  <p className="text-sm font-medium text-gray-900">{crop.name}</p>
+                                  <p className={`text-sm font-medium ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{crop.name}</p>
                                 </div>
                               </div>
                             ))
                           ) : (
-                            <p className="text-sm text-gray-500 text-center py-2">No crops registered</p>
+                            <p className={`text-sm ${darkMode ? "text-slate-500" : "text-gray-500"} text-center py-2`}>No crops registered</p>
                           )}
                         </div>
                       )}
@@ -804,10 +812,10 @@ const Farmer = () => {
 
                   {/* Edit Mode Actions */}
                   {editingFarmer === farmer.id && (
-                    <div className="mt-6 pt-6 border-t border-gray-100">
+                    <div className={`mt-6 pt-6 border-t ${darkMode ? "border-slate-800" : "border-gray-100"} transition-colors`}>
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-gray-500">
-                          <span className={`px-2 py-1 rounded ${updateHighlights.fullName || updateHighlights.contact || updateHighlights.address || updateHighlights.farmLocation || updateHighlights.hectares || updateHighlights.crops ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                          <span className={`px-2 py-1 rounded font-medium ${updateHighlights.fullName || updateHighlights.contact || updateHighlights.address || updateHighlights.farmLocation || updateHighlights.hectares || updateHighlights.crops ? (darkMode ? "bg-yellow-900/30 text-yellow-400" : "bg-yellow-100 text-yellow-700") : (darkMode ? "bg-slate-800 text-slate-500" : "bg-gray-100 text-gray-600")}`}>
                             {Object.keys(updateHighlights).filter(key => updateHighlights[key]).length} changes
                           </span>
                         </div>
@@ -815,7 +823,7 @@ const Farmer = () => {
                           <button
                             onClick={() => handleSave(farmer.id)}
                             disabled={isGeocoding}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center disabled:opacity-50"
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center disabled:opacity-50 shadow-lg shadow-green-900/20"
                           >
                             <FaSave className="mr-2" />
                             {isGeocoding ? "Processing..." : "Save Changes"}
@@ -825,7 +833,7 @@ const Farmer = () => {
                               setEditingFarmer(null);
                               setUpdateHighlights({});
                             }}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center"
+                            className={`px-4 py-2 ${darkMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-gray-200 text-gray-700 hover:bg-gray-300"} rounded-lg transition-all flex items-center`}
                           >
                             <FaBan className="mr-2" />
                             Cancel
@@ -840,46 +848,59 @@ const Farmer = () => {
           </div>
         ) : (
           /* List View */
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-xl border overflow-hidden transition-colors`}>
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className={`${darkMode ? "bg-slate-800 border-slate-700" : "bg-gray-50 border-gray-100"} border-b`}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Farmer</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crops</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Farmer</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Contact</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Location</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Crops</th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className={`divide-y ${darkMode ? "divide-slate-800" : "divide-gray-100"}`}>
                 {filteredFarmers.map((farmer) => (
-                  <tr key={farmer.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={farmer.id} 
+                    className={`${darkMode ? "hover:bg-green-900/10" : "hover:bg-green-50"} transition-colors cursor-help group`}
+                    onMouseEnter={() => {
+                      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                      hoverTimeoutRef.current = setTimeout(() => {
+                        setHoveredFarmer(farmer);
+                      }, 400); // 400ms delay for smoothness
+                    }}
+                    onMouseLeave={() => {
+                      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                      setHoveredFarmer(null);
+                    }}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                          <FaUser className="text-green-600" />
+                        <div className={`w-10 h-10 ${darkMode ? "bg-green-900/20" : "bg-green-100"} rounded-full flex items-center justify-center mr-3`}>
+                          <FaUser className={darkMode ? "text-green-400" : "text-green-600"} />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{farmer.fullName}</p>
-                          <p className="text-xs text-gray-500">{farmer.hectares || 0} hectares</p>
+                          <p className={`font-medium ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{farmer.fullName}</p>
+                          <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>{farmer.hectares || 0} hectares</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-gray-900">{farmer.contact}</p>
+                      <p className={darkMode ? "text-slate-400" : "text-gray-900"}>{farmer.contact}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-gray-900">{farmer.farmLocation}</p>
+                      <p className={darkMode ? "text-slate-400" : "text-gray-900"}>{farmer.farmLocation}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
                         {farmer.mainCrops?.slice(0, 3).map((crop, index) => (
-                          <span key={index} className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                          <span key={index} className={`px-2 py-1 ${darkMode ? "bg-green-900/30 text-green-400 border border-green-800/30" : "bg-green-100 text-green-700"} text-xs rounded-full font-medium`}>
                             {crop.name}
                           </span>
                         ))}
                         {farmer.mainCrops?.length > 3 && (
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                          <span className={`px-2 py-1 ${darkMode ? "bg-slate-800 text-slate-500" : "bg-gray-100 text-gray-600"} text-xs rounded-full`}>
                             +{farmer.mainCrops.length - 3} more
                           </span>
                         )}
@@ -889,13 +910,13 @@ const Farmer = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleEdit(farmer)}
-                          className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors"
+                          className={`${darkMode ? "text-green-400 hover:text-green-300 hover:bg-green-900/20" : "text-green-600 hover:text-green-700 hover:bg-green-50"} p-2 rounded-lg transition-colors`}
                         >
                           <FaEdit />
                         </button>
                         <button
                           onClick={() => handleDelete(farmer.id)}
-                          className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          className={`${darkMode ? "text-red-400 hover:text-red-300 hover:bg-red-900/20" : "text-red-600 hover:text-red-700 hover:bg-red-50"} p-2 rounded-lg transition-colors`}
                         >
                           <FaTrash />
                         </button>
@@ -910,12 +931,12 @@ const Farmer = () => {
 
         {/* Empty State */}
         {filteredFarmers.length === 0 && !isLoading && (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-            <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <FaUser className="text-gray-400 text-2xl" />
+          <div className={`text-center py-12 ${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-xl border transition-colors`}>
+            <div className={`w-16 h-16 mx-auto ${darkMode ? "bg-slate-800" : "bg-gray-100"} rounded-full flex items-center justify-center mb-4`}>
+              <FaUser className={darkMode ? "text-slate-600" : "text-gray-400"} text-2xl />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No farmers found</h3>
-            <p className="text-gray-500 max-w-md mx-auto">
+            <h3 className={`text-lg font-medium ${darkMode ? "text-slate-200" : "text-gray-900"} mb-2`}>No farmers found</h3>
+            <p className={`max-w-md mx-auto ${darkMode ? "text-slate-500" : "text-gray-500"}`}>
               {searchQuery || locationFilter
                 ? "Try adjusting your search or filter to find what you're looking for."
                 : "No farmers have been registered yet."}
@@ -926,7 +947,7 @@ const Farmer = () => {
                   setSearchQuery("");
                   setLocationFilter("");
                 }}
-                className="mt-4 px-4 py-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                className={`mt-4 px-4 py-2 ${darkMode ? "text-green-400 hover:bg-green-900/20" : "text-green-600 hover:bg-green-50"} rounded-lg transition-colors font-medium`}
               >
                 Clear all filters
               </button>
@@ -936,20 +957,102 @@ const Farmer = () => {
       </div>
 
       {/* Footer */}
-      <div className="bg-white border-t border-gray-100 py-6 mt-8">
+      <div className={`${darkMode ? "bg-slate-900/50 border-slate-800" : "bg-white border-gray-100"} border-t py-6 mt-8 transition-colors`}>
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="text-sm text-gray-500">
+            <div className={`${darkMode ? "text-slate-500" : "text-gray-500"} text-sm`}>
               <p>Department of Agriculture - Canlaon City</p>
               <p className="text-xs mt-1">Farmer Management System</p>
             </div>
-            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-4 md:mt-0">
+            <div className={`flex items-center space-x-4 text-sm ${darkMode ? "text-slate-600" : "text-gray-500"} mt-4 md:mt-0`}>
               <span>Total: {farmers.length} farmers</span>
               <span>Active: {farmers.length} registered</span>
             </div>
           </div>
         </div>
       </div>
+      {/* Quick Preview Modal Overlay */}
+      {hoveredFarmer && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${darkMode ? "bg-black/60" : "bg-slate-900/10"} backdrop-blur-[2px] pointer-events-none`}>
+          <div className={`${darkMode ? "bg-slate-900 border-slate-700 shadow-emerald-900/20" : "bg-white border-slate-100 shadow-slate-200/50"} w-full max-w-lg rounded-3xl shadow-2xl border overflow-hidden animate-in fade-in zoom-in duration-200 pointer-events-auto`}>
+            {/* Header */}
+            <div className={`bg-gradient-to-br ${darkMode ? "from-green-700 to-emerald-900" : "from-green-600 to-emerald-700"} p-6 text-white relative`}>
+              <div className="flex items-center gap-4">
+                <div className={`w-16 h-16 ${darkMode ? "bg-white/10" : "bg-white/20"} rounded-2xl backdrop-blur-md flex items-center justify-center border border-white/30`}>
+                  <FaUser className="text-2xl text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tight">{hoveredFarmer.fullName}</h3>
+                  <p className="text-green-100 text-xs font-bold uppercase tracking-widest opacity-80 line-clamp-1">Farmer ID: {hoveredFarmer.id}</p>
+                </div>
+              </div>
+              <div className="absolute top-6 right-6 text-white/20">
+                <FaInfoCircle className="text-4xl" />
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-widest mb-2`}>Contact Details</p>
+                  <p className={`text-sm font-bold ${darkMode ? "text-slate-200" : "text-slate-700"} flex items-center gap-2`}>
+                    <span className={`w-6 h-6 ${darkMode ? "bg-slate-800" : "bg-slate-100"} rounded-full flex items-center justify-center`}><FaPhone className={`text-[10px] ${darkMode ? "text-slate-500" : "text-slate-400"}`} /></span>
+                    {hoveredFarmer.contact || "No contact info"}
+                  </p>
+                </div>
+                <div>
+                  <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-widest mb-2`}>Farm Size</p>
+                  <p className={`text-sm font-bold ${darkMode ? "text-slate-200" : "text-slate-700"} flex items-center gap-2`}>
+                     <span className={`w-6 h-6 ${darkMode ? "bg-slate-800" : "bg-slate-100"} rounded-full flex items-center justify-center`}><FaTractor className={`text-[10px] ${darkMode ? "text-slate-500" : "text-slate-400"}`} /></span>
+                     {hoveredFarmer.hectares || 0} Hectares
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-widest mb-2`}>Primary Address</p>
+                <p className={`text-sm font-bold ${darkMode ? "text-slate-300" : "text-slate-700"} leading-relaxed ${darkMode ? "bg-slate-800/50 border-slate-800" : "bg-slate-50 border-slate-100"} p-3 rounded-xl border`}>
+                  {hoveredFarmer.address}
+                </p>
+              </div>
+
+              <div>
+                <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-widest mb-2`}>Farm Location</p>
+                <p className={`text-sm font-bold ${darkMode ? "text-slate-300" : "text-slate-700"} leading-relaxed ${darkMode ? "bg-slate-800/50 border-slate-800" : "bg-slate-50 border-slate-100"} p-3 rounded-xl border`}>
+                  {hoveredFarmer.farmLocation}
+                </p>
+              </div>
+
+              {/* Registered Crops */}
+              <div className="pt-2">
+                <p className={`text-[10px] font-black ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-widest mb-3`}>Registered Crops ({hoveredFarmer.mainCrops?.length || 0})</p>
+                <div className="flex flex-wrap gap-2">
+                  {hoveredFarmer.mainCrops?.length > 0 ? (
+                    hoveredFarmer.mainCrops.map((crop, idx) => (
+                      <div key={idx} className={`${darkMode ? "bg-green-900/30 text-green-400 border-green-800/30" : "bg-green-50 text-green-700 border-green-100/50"} text-[10px] font-black uppercase px-3 py-1.5 rounded-full border`}>
+                        {crop.name}
+                      </div>
+                    ))
+                  ) : (
+                    <p className={`text-xs ${darkMode ? "text-slate-600" : "text-slate-400"} italic`}>No crops registered</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Tip */}
+            <div className={`px-8 py-4 ${darkMode ? "bg-slate-800/80 border-slate-700" : "bg-slate-50 border-slate-100"} border-t flex items-center justify-between`}>
+              <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-slate-400"} font-bold uppercase tracking-wider`}>Quick Preview Mode</p>
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
