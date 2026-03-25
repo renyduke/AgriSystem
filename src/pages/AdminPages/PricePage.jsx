@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import API_BASE_URL from '../../config';
 import { useTheme } from '../../context/ThemeContext';
+import { FaEdit, FaTrash, FaCheck, FaTimes, FaSpinner } from 'react-icons/fa';
 
 // Classify commodities into sections
 const RICE_CORN_KEYWORDS = ['rice', 'corn', 'palay'];
@@ -47,6 +48,11 @@ const PricePage = () => {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedWeek, setSelectedWeek] = useState('all');
 
+  // Management States
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // Signature States
   const [preparedBy, setPreparedBy] = useState('JACKLORD P. VILLARINO');
   const [preparedTitle, setPreparedTitle] = useState('FW-1/Price Monitoring In-Charge');
@@ -81,6 +87,52 @@ const PricePage = () => {
     } catch (err) {
       console.error('Error fetching price data:', err);
       setLoading(false);
+    }
+  };
+
+  const handleEditStart = (commodity) => {
+    setEditingId(commodity);
+    setEditValue(getBaseCommodityName(commodity));
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const handleEditSave = async (oldName) => {
+    if (!editValue.trim() || editValue === getBaseCommodityName(oldName)) {
+      handleEditCancel();
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await axios.put(`${API_BASE_URL}/api/commodities/${encodeURIComponent(oldName)}`, {
+        new_name: editValue.trim()
+      });
+      await fetchPriceData();
+      handleEditCancel();
+    } catch (err) {
+      alert("Failed to rename commodity: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDelete = async (commodityName) => {
+    if (!window.confirm(`Are you sure you want to delete all records for "${commodityName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/commodities/${encodeURIComponent(commodityName)}`);
+      await fetchPriceData();
+    } catch (err) {
+      alert("Failed to delete commodity: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -377,6 +429,7 @@ const PricePage = () => {
             <th rowSpan={2} className={`px-4 py-3 text-center text-xs font-bold ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} uppercase border`}>Commodity</th>
             <th colSpan={3} className={`px-4 py-2 text-center text-xs font-bold ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} uppercase border`}>Prices (Php/Kilograms)</th>
             <th rowSpan={2} className={`px-4 py-3 text-center text-xs font-bold ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} uppercase border w-28`}>Remarks</th>
+            <th rowSpan={2} className={`px-4 py-3 text-center text-xs font-bold ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} uppercase border w-24`}>Actions</th>
           </tr>
           <tr>
             <th className={`px-4 py-2 text-center text-xs font-bold ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border w-28`}>Lowest</th>
@@ -387,10 +440,26 @@ const PricePage = () => {
         <tbody className={`${darkMode ? "bg-slate-900 divide-slate-700" : "bg-white divide-gray-300"} divide-y`}>
           {commodityList.map((commodity, idx) => {
             const prices = data.commodityPrices[getBaseCommodityName(commodity)];
+            const isEditing = editingId === commodity;
+
             return (
               <tr key={commodity} className={darkMode ? "hover:bg-slate-800/50" : "hover:bg-gray-50"}>
                 <td className={`px-3 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{idx + 1}</td>
-                <td className={`px-4 py-2 text-left text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{formatCommodityName(commodity)}</td>
+                <td className={`px-4 py-2 text-left text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>
+                  {isEditing ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className={`px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-green-500 outline-none ${darkMode ? "bg-slate-800 border-slate-600 text-white" : "bg-white border-gray-300"}`}
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    formatCommodityName(commodity)
+                  )}
+                </td>
                 <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>
                   {prices && prices.lowest ? `₱${prices.lowest.toFixed(2)}` : ''}
                 </td>
@@ -401,6 +470,49 @@ const PricePage = () => {
                   {prices && prices.average ? `₱${prices.average.toFixed(2)}` : ''}
                 </td>
                 <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-500 border-slate-700" : "text-gray-500 border-gray-300"} border`}></td>
+                <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>
+                  <div className="flex items-center justify-center gap-3">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={() => handleEditSave(commodity)}
+                          disabled={isProcessing}
+                          className="text-green-500 hover:text-green-600 transition-colors disabled:opacity-50"
+                          title="Save"
+                        >
+                          {isProcessing ? <FaSpinner className="animate-spin" /> : <FaCheck />}
+                        </button>
+                        <button
+                          onClick={handleEditCancel}
+                          disabled={isProcessing}
+                          className="text-gray-500 hover:text-gray-600 transition-colors"
+                          title="Cancel"
+                        >
+                          <FaTimes />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditStart(commodity)}
+                          disabled={isProcessing}
+                          className="text-blue-500 hover:text-blue-600 transition-colors disabled:opacity-50"
+                          title="Edit"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(commodity)}
+                          disabled={isProcessing}
+                          className="text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
+                          title="Delete"
+                        >
+                          <FaTrash />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
               </tr>
             );
           })}
@@ -460,7 +572,7 @@ const PricePage = () => {
                 <span>📥</span><span>CSV</span>
               </button>
               <button onClick={handlePrint}
-                className={`flex-1 px-4 py-3 ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"} border rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 text-sm`}>
+                className={`flex-1 px-4 py-3 ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-gray-700 hover:bg-slate-50"} border rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 text-sm`}>
                 <span>🖨️</span><span>Print</span>
               </button>
             </div>

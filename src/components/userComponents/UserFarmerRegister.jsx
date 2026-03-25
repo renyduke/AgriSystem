@@ -30,7 +30,7 @@ const FarmerRegister = () => {
   });
   const [selectedAddressBarangay, setSelectedAddressBarangay] = useState("");
   const [selectedFarmBarangay, setSelectedFarmBarangay] = useState("");
-  const [newCrop, setNewCrop] = useState({ name: "", plantingDate: "" });
+  const [newCrop, setNewCrop] = useState({ name: "" });
   const [error, setError] = useState("");
   const [vegetables, setVegetables] = useState([]);
   const [loadingVegetables, setLoadingVegetables] = useState(false);
@@ -182,21 +182,20 @@ const FarmerRegister = () => {
   };
 
   const addCrop = () => {
-    if (newCrop.name && newCrop.plantingDate && vegetables.some(v => v.name === newCrop.name)) {
+    if (newCrop.name && vegetables.some(v => v.name === newCrop.name)) {
       setIsAddingCrop(true);
       setFarmerData((prevData) => ({
         ...prevData,
         mainCrops: [...prevData.mainCrops, { ...newCrop }],
       }));
-      setNewCrop({ name: "", plantingDate: "" });
+      setNewCrop({ name: "" });
       setError("");
       setLocalReply({ type: "success", message: "Crop added successfully (Localhost)" });
       setTimeout(() => {
         setIsAddingCrop(false);
         setLocalReply(null);
       }, 2000);
-    } else {
-      setError("Please select a vegetable and planting date.");
+      setError("Please select a vegetable.");
     }
   };
 
@@ -253,7 +252,7 @@ const FarmerRegister = () => {
     setIsSubmitting(true);
     try {
       const flattenedCrops = farmerData.mainCrops.reduce((acc, crop, index) => {
-        acc[`crop${index + 1}`] = { name: crop.name, plantingDate: crop.plantingDate };
+        acc[`crop${index + 1}`] = { name: crop.name };
         return acc;
       }, {});
 
@@ -275,7 +274,6 @@ const FarmerRegister = () => {
         addDoc(collection(db, "vegetables"), {
           name: crop.name,
           farmerId: farmerId,
-          plantingDate: crop.plantingDate,
         })
       );
       await Promise.all(vegetablePromises);
@@ -302,7 +300,7 @@ const FarmerRegister = () => {
       });
       setSelectedAddressBarangay("");
       setSelectedFarmBarangay("");
-      setNewCrop({ name: "", plantingDate: "" });
+      setNewCrop({ name: "" });
       setError("");
       setTimeout(() => {
         setLocalReply(null);
@@ -617,7 +615,7 @@ const FarmerRegister = () => {
               </div>
               
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div className="grid grid-cols-1 gap-6 bg-slate-50/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Commodity</label>
                     <div className="relative">
@@ -639,19 +637,7 @@ const FarmerRegister = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Planting Date</label>
-                    <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
-                      <FaCalendarAlt className="text-slate-200 dark:text-slate-600 mr-3 w-3 h-3" />
-                      <input
-                        type="date"
-                        name="plantingDate"
-                        value={newCrop.plantingDate}
-                        onChange={handleNewCropChange}
-                        className="w-full bg-transparent focus:outline-none text-sm text-slate-700 dark:text-slate-200 font-medium"
-                      />
-                    </div>
-                  </div>
+
                   
                   <button
                     type="button"
@@ -671,7 +657,6 @@ const FarmerRegister = () => {
                           <FaCheckCircle className="w-3.5 h-3.5 text-green-500/50 group-hover:text-green-500 transition-colors" />
                           <div>
                             <p className="text-xs font-bold text-slate-700 dark:text-gray-200">{crop.name}</p>
-                            <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">{crop.plantingDate}</p>
                           </div>
                         </div>
                         <button type="button" onClick={() => removeCrop(index)} className="p-1.5 text-slate-200 hover:text-red-400 transition-all">
@@ -731,7 +716,7 @@ const FarmerRegister = () => {
                   <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex-shrink-0 flex items-center justify-center font-bold text-[10px]">4</div>
                   <div>
                     <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">Inventory</h4>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Add commodity and date for forecasts.</p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-medium">Add commodity for crop tracking.</p>
                   </div>
                 </div>
               </div>
