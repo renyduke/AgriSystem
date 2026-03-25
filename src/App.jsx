@@ -27,57 +27,65 @@ import VolumePage from "./pages/AdminPages/VolumePage";
 import PricePage from "./pages/AdminPages/PricePage";
 import FarmerBankingPage from "./pages/AdminPages/FarmerBankingPage";
 
+// Authentication imports
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 function App() {
   return (
     <Router>
-      <Routes>
-        {/* Main Layout Routes - Sign In, Forgot Password & Sign Up */}
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<SignIn />} />
-          <Route path="forgot-password" element={<ForgotPassword />} />
-          <Route path="signup" element={<SignUp />} />
-        </Route>
+      <AuthProvider>
+        <Routes>
+          {/* Main Layout Routes - Sign In, Forgot Password & Sign Up */}
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<SignIn />} />
+            <Route path="forgot-password" element={<ForgotPassword />} />
+            <Route path="signup" element={<SignUp />} />
+          </Route>
 
-        {/* Admin Routes - Protected Dashboard Area */}
-        <Route path="/home" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="account" element={<Account />} />
-          <Route path="maps" element={<Maps />} />
-          <Route path="vegetables" element={<Vegetables />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="drawmap" element={<Drawmap />} />
-          <Route
-            path="analysis"
-            element={
-              <ErrorBoundary>
-                <Analysis />
-              </ErrorBoundary>
-            }
-          />
-          <Route path="farmer" element={<Farmer />} />
-          <Route path="farmer/:id" element={<Farmer />} />
-          <Route path="usermanagement" element={<UserManagement />} />
-          <Route path="farmerregister" element={<FarmerRegister />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="suggest-farmer" element={<SuggestFarmer />} />
-          <Route path="damagereport" element={<DamageReport />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="logout" element={<LogOut />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="volume" element={<VolumePage />} />
-          <Route path="price" element={<PricePage />} />
-          <Route path="farmer-banking" element={<FarmerBankingPage />} />
-        </Route>
+          {/* Admin Routes - Protected Dashboard Area */}
+          <Route element={<ProtectedRoute adminOnly={true} />}>
+            <Route path="/home" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="account" element={<Account />} />
+              <Route path="maps" element={<Maps />} />
+              <Route path="vegetables" element={<Vegetables />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="drawmap" element={<Drawmap />} />
+              <Route
+                path="analysis"
+                element={
+                  <ErrorBoundary>
+                    <Analysis />
+                  </ErrorBoundary>
+                }
+              />
+              <Route path="farmer" element={<Farmer />} />
+              <Route path="farmer/:id" element={<Farmer />} />
+              <Route path="usermanagement" element={<UserManagement />} />
+              <Route path="farmerregister" element={<FarmerRegister />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="suggest-farmer" element={<SuggestFarmer />} />
+              <Route path="damagereport" element={<DamageReport />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="logout" element={<LogOut />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="volume" element={<VolumePage />} />
+              <Route path="price" element={<PricePage />} />
+              <Route path="farmer-banking" element={<FarmerBankingPage />} />
+            </Route>
+          </Route>
 
-        {/* Root-level Farmer Profile Route (optional, for non-admin access) */}
-        <Route path="/farmer/:id" element={<Farmer />} />
+          {/* Root-level Farmer Profile Route (optional, for non-admin access) */}
+          <Route path="/farmer/:id" element={<Farmer />} />
 
-        {/* Farmer Registration Routes */}
-        <Route path="/register" element={<FarmerLayout />}>
-          <Route index element={<FarmerRegister />} />
-          <Route path="farmerregister" element={<FarmerRegister />} />
-        </Route>
-      </Routes>
+          {/* Farmer Registration Routes */}
+          <Route path="/register" element={<FarmerLayout />}>
+            <Route index element={<FarmerRegister />} />
+            <Route path="farmerregister" element={<FarmerRegister />} />
+          </Route>
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }
