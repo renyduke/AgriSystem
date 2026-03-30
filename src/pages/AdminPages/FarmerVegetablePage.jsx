@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import { useNavigate } from "react-router-dom";
 import { db } from "../../config/firebaseConfig";
 import { useTheme } from "../../context/ThemeContext";
@@ -197,8 +198,7 @@ const FarmersList = ({ vegetable, navigate, darkMode }) => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className={`w-10 h-10 ${darkMode ? "text-green-500" : "text-green-600"} animate-spin mb-4`} />
-        <p className={`${darkMode ? "text-slate-400" : "text-slate-500"} font-medium`}>Finding farmers who grow {vegetable}...</p>
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }

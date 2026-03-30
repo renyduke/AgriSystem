@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { OrbitProgress } from 'react-loading-indicators';
 import axios from 'axios';
 import API_BASE_URL from '../../config';
 import { useTheme } from '../../context/ThemeContext';
@@ -17,10 +18,17 @@ const getBaseCommodityName = (name) => {
   return base;
 };
 
+// Commodities sold per bundle instead of per kg
+const BUNDLE_COMMODITIES = ['pechay'];
+
 // Format display name — always show with proper unit suffix, never double
 const formatCommodityName = (name) => {
   if (!name) return "";
   const base = getBaseCommodityName(name);
+  // Check if this commodity uses a non-default unit
+  if (BUNDLE_COMMODITIES.some(b => base.toLowerCase().includes(b))) {
+    return `${base} (Per Bundle)`;
+  }
   // Preserve original suffix if it had one (e.g. "Per Sack", "Per Piece")
   const match = name.match(/\(Per\s+(Kg\.|Sack|Piece|Bundle)\)/i);
   const suffix = match ? match[0] : '(Per Kg.)';
@@ -52,6 +60,7 @@ const VolumePage = () => {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Signature States
   const [preparedBy, setPreparedBy] = useState('JACKLORD P. VILLARINO');
@@ -79,6 +88,7 @@ const VolumePage = () => {
   }, [selectedMonth]);
 
   const fetchVolumeData = async () => {
+    setIsRefreshing(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/api/dashboard`);
       setVolumeData(response.data.volume_data);
@@ -87,6 +97,8 @@ const VolumePage = () => {
     } catch (err) {
       console.error('Error fetching volume data:', err);
       setLoading(false);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -402,10 +414,7 @@ const VolumePage = () => {
   if (loading) {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-slate-950" : "bg-gradient-to-br from-green-50 to-blue-50"} flex items-center justify-center transition-colors duration-300`}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto"></div>
-          <p className={`mt-4 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Loading volume data...</p>
-        </div>
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }
@@ -555,13 +564,22 @@ const VolumePage = () => {
                 ))}
               </select>
             </div>
-            <div className="flex gap-3 items-end">
+            <div className="flex gap-2 items-end">
+              <button 
+                onClick={fetchVolumeData} 
+                disabled={isRefreshing}
+                className={`flex-1 px-2 py-3 ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-gray-700 hover:bg-slate-50"} border rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 text-xs truncate whitespace-nowrap`}
+                title="Refresh Data"
+              >
+                {isRefreshing ? <FaSpinner className="animate-spin" /> : <span>🔄</span>}
+                <span>{isRefreshing ? "Syncing All Data..." : "Refresh"}</span>
+              </button>
               <button onClick={downloadCSV}
-                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-md shadow-green-100 active:scale-95 text-sm">
+                className="flex-1 px-2 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-green-100 active:scale-95 text-xs truncate whitespace-nowrap">
                 <span>📥</span><span>CSV</span>
               </button>
               <button onClick={handlePrint}
-                className={`flex-1 px-4 py-3 ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"} border rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 text-sm`}>
+                className={`flex-1 px-2 py-3 ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"} border rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 text-xs truncate whitespace-nowrap`}>
                 <span>🖨️</span><span>Print</span>
               </button>
             </div>

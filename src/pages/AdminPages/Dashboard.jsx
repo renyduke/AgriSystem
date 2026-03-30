@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ReactApexChart from 'react-apexcharts';
-import Loading from '../../components/Loading';
+import { OrbitProgress } from 'react-loading-indicators';
 import API_BASE_URL from '../../config';
 import { useTheme } from '../../context/ThemeContext';
 
 // Utility functions for commodity normalization
 const getBaseCommodityName = (name) => {
   if (!name) return "";
-  let base = name.replace(/\s*\(Per\s+(Kg\.|Sack|Piece|Bundle)\)\s*/gi, '').trim();
+  // Strip out variations like "(Per Kg.)", "Kg", "Kg.", "(Pc.)", "Pcs", etc.
+  let base = name.replace(/\s*\(?(Per\s*)?(Kg\.?|Sack|Piece|Bundle|Pc\.?|Pcs\.?)\)?\s*/gi, '').trim();
   // Normalize known duplicates/typos
   if (base.toLowerCase() === 'cauli-flower') return 'Cauliflower';
   return base;
@@ -17,8 +18,17 @@ const getBaseCommodityName = (name) => {
 const formatCommodityName = (name) => {
   if (!name) return "";
   const base = getBaseCommodityName(name);
-  const match = name.match(/\(Per\s+(Kg\.|Sack|Piece|Bundle)\)/i);
-  const suffix = match ? match[0] : '(Per Kg.)';
+  const match = name.match(/\(?(Per\s*)?(Kg\.?|Sack|Piece|Bundle|Pc\.?|Pcs\.?)\)?/i);
+  
+  // Format the suffix cleanly based on what was matched
+  let suffix = '(Per Kg.)'; // default
+  if (match) {
+    const rawUnit = match[2].toLowerCase();
+    if (rawUnit.includes('pc') || rawUnit.includes('piece')) suffix = '(Per Pc.)';
+    else if (rawUnit.includes('sack')) suffix = '(Per Sack)';
+    else if (rawUnit.includes('bundle')) suffix = '(Per Bundle)';
+  }
+  
   return `${base} ${suffix}`;
 };
 
@@ -734,104 +744,59 @@ CONFIG = {
   };
 
   const getMultiCommodityBarChart = () => {
-    if (!dashboardData || comparisonCommodities.length === 0) {
-      return { series: [], options: {} };
-    }
+    if (!dashboardData || !comparisonCommodities.length) return { series: [], options: {} };
 
-    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const commodity = comparisonCommodities[0];
+    const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
 
-    const series = comparisonCommodities.map(commodity => {
-      const weeklyData = weeks.map((_, weekIndex) => {
-        const weekNumber = weekIndex + 1;
+    // Get all years available for this commodity
+    const years = [...new Set(
+      sourceData
+        .filter(d => getBaseCommodityName(d.commodity) === commodity)
+        .map(d => d.year)
+    )].sort();
 
-        if (comparisonDataType === 'volume') {
-          const dataPoint = dashboardData.volume_data.find(
-            item => getBaseCommodityName(item.commodity) === commodity &&
-              item.week === weekNumber &&
-              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
-          );
-          return dataPoint ? dataPoint.volume : 0;
-        } else {
-          const dataPoint = dashboardData.price_data.find(
-            item => getBaseCommodityName(item.commodity) === commodity &&
-              item.week === weekNumber &&
-              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
-          );
-          return dataPoint ? dataPoint.average_price : 0;
-        }
+    // Build one series per year, averaged by month
+    const series = years.map(year => {
+      const monthlyData = Array.from({ length: 12 }, (_, mi) => {
+        const month = mi + 1;
+        const rows = sourceData.filter(d =>
+          getBaseCommodityName(d.commodity) === commodity &&
+          d.year === year && d.month === month
+        );
+        if (!rows.length) return null;
+        const vals = rows.map(d => comparisonDataType === 'volume' ? d.volume : d.average_price).filter(v => v != null);
+        return vals.length ? parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : null;
       });
-
-      return { name: commodity, data: weeklyData };
+      return { name: String(year), data: monthlyData };
     });
 
     return {
       series,
       options: {
-        chart: {
-          type: 'bar',
-          height: 400,
-          toolbar: { show: true },
-          animations: { enabled: true, speed: 800 }
-        },
-        plotOptions: {
-          bar: {
-            horizontal: false,
-            columnWidth: '70%',
-            borderRadius: 4,
-            dataLabels: { position: 'top' }
-          }
-        },
-        dataLabels: {
-          enabled: true,
-          formatter: function (val) {
-            return comparisonDataType === 'price'
-              ? '₱' + val.toFixed(1)
-              : val.toFixed(0);
-          },
-          offsetY: -20,
-          style: { fontSize: '10px', colors: ['#304758'] }
-        },
-        colors: ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0'],
+        chart: { type: 'bar', height: 420, toolbar: { show: true } },
+        plotOptions: { bar: { horizontal: false, columnWidth: '70%', borderRadius: 3 } },
+        dataLabels: { enabled: false },
+        colors: ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0', '#546E7A'],
         stroke: { show: true, width: 2, colors: ['transparent'] },
         xaxis: {
-          categories: weeks,
-          title: { text: 'Week Number', style: { fontSize: '14px', fontWeight: 600 } }
+          categories: monthNames,
+          title: { text: 'Month', style: { fontSize: '13px', fontWeight: 600 } }
         },
         yaxis: {
-          title: {
-            text: comparisonDataType === 'price' ? 'Price (₱)' : 'Volume (Kg)',
-            style: { fontSize: '14px', fontWeight: 600 }
-          },
-          labels: {
-            formatter: function (val) {
-              return comparisonDataType === 'price'
-                ? '₱' + val.toFixed(0)
-                : val.toFixed(0);
-            }
-          }
-        },
-        fill: { opacity: 1 },
-        legend: {
-          position: 'top',
-          horizontalAlign: 'left',
-          fontSize: '12px',
-          markers: { width: 12, height: 12, radius: 2 }
+          title: { text: comparisonDataType === 'price' ? 'Avg Price (₱/Kg)' : 'Volume (Kg)', style: { fontSize: '13px', fontWeight: 600 } },
+          labels: { formatter: val => val == null ? '' : comparisonDataType === 'price' ? '₱' + val.toFixed(0) : val.toFixed(0) }
         },
         title: {
-          text: `📊 Multi-Commodity ${comparisonDataType === 'price' ? 'Price' : 'Volume'} Comparison`,
-          align: 'left',
-          style: { fontSize: '18px', fontWeight: 'bold' }
+          text: `Prevailing Market ${comparisonDataType === 'price' ? 'Prices' : 'Volume'} of ${commodity} (${years.join('-')})`,
+          align: 'center',
+          style: { fontSize: '16px', fontWeight: 'bold' }
         },
+        legend: { position: 'bottom', horizontalAlign: 'center' },
         tooltip: {
-          shared: true,
-          intersect: false,
-          y: {
-            formatter: function (val) {
-              return comparisonDataType === 'price'
-                ? '₱' + val.toFixed(2)
-                : val.toFixed(2) + ' Kg';
-            }
-          }
+          shared: true, intersect: false,
+          y: { formatter: val => val == null ? 'No data' : comparisonDataType === 'price' ? '₱' + val.toFixed(2) : val.toFixed(2) + ' Kg' }
         },
         grid: { borderColor: '#e7e7e7', strokeDashArray: 4 }
       }
@@ -839,83 +804,56 @@ CONFIG = {
   };
 
   const getWeeklyTrendLineChart = () => {
-    if (!dashboardData || comparisonCommodities.length === 0) {
-      return { series: [], options: {} };
-    }
+    if (!dashboardData || !comparisonCommodities.length) return { series: [], options: {} };
 
-    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const commodity = comparisonCommodities[0];
+    const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
 
-    const series = comparisonCommodities.map(commodity => {
-      const weeklyData = weeks.map((_, weekIndex) => {
-        const weekNumber = weekIndex + 1;
+    const years = [...new Set(
+      sourceData
+        .filter(d => getBaseCommodityName(d.commodity) === commodity)
+        .map(d => d.year)
+    )].sort();
 
-        if (comparisonDataType === 'volume') {
-          const dataPoint = dashboardData.volume_data.find(
-            item => getBaseCommodityName(item.commodity) === commodity &&
-              item.week === weekNumber &&
-              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
-          );
-          return dataPoint ? dataPoint.volume : null;
-        } else {
-          const dataPoint = dashboardData.price_data.find(
-            item => getBaseCommodityName(item.commodity) === commodity &&
-              item.week === weekNumber &&
-              (comparisonYearFilter === 'all' || item.year === parseInt(comparisonYearFilter))
-          );
-          return dataPoint ? dataPoint.average_price : null;
-        }
+    const series = years.map(year => {
+      const monthlyData = Array.from({ length: 12 }, (_, mi) => {
+        const month = mi + 1;
+        const rows = sourceData.filter(d =>
+          getBaseCommodityName(d.commodity) === commodity &&
+          d.year === year && d.month === month
+        );
+        if (!rows.length) return null;
+        const vals = rows.map(d => comparisonDataType === 'volume' ? d.volume : d.average_price).filter(v => v != null);
+        return vals.length ? parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : null;
       });
-
-      return { name: commodity, data: weeklyData };
+      return { name: String(year), data: monthlyData };
     });
 
     return {
       series,
       options: {
-        chart: {
-          type: 'line',
-          height: 400,
-          toolbar: { show: true },
-          zoom: { enabled: true }
-        },
+        chart: { type: 'line', height: 420, toolbar: { show: true }, zoom: { enabled: true } },
         stroke: { width: 3, curve: 'smooth' },
         markers: { size: 5, hover: { size: 7 } },
-        colors: ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0'],
+        colors: ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0', '#546E7A'],
         xaxis: {
-          categories: weeks,
-          title: { text: 'Week Number', style: { fontSize: '14px', fontWeight: 600 } }
+          categories: monthNames,
+          title: { text: 'Month', style: { fontSize: '13px', fontWeight: 600 } }
         },
         yaxis: {
-          title: {
-            text: comparisonDataType === 'price' ? 'Price (₱)' : 'Volume (Kg)',
-            style: { fontSize: '14px', fontWeight: 600 }
-          },
-          labels: {
-            formatter: function (val) {
-              if (val === null) return '';
-              return comparisonDataType === 'price'
-                ? '₱' + val.toFixed(0)
-                : val.toFixed(0);
-            }
-          }
+          title: { text: comparisonDataType === 'price' ? 'Avg Price (₱/Kg)' : 'Volume (Kg)', style: { fontSize: '13px', fontWeight: 600 } },
+          labels: { formatter: val => val == null ? '' : comparisonDataType === 'price' ? '₱' + val.toFixed(0) : val.toFixed(0) }
         },
         title: {
-          text: `📈 Weekly Trend Analysis - ${comparisonDataType === 'price' ? 'Price' : 'Volume'}`,
-          align: 'left',
-          style: { fontSize: '18px', fontWeight: 'bold' }
+          text: `${commodity} ${comparisonDataType === 'price' ? 'Price' : 'Volume'} Trend by Year`,
+          align: 'center',
+          style: { fontSize: '16px', fontWeight: 'bold' }
         },
-        legend: { position: 'top', horizontalAlign: 'right' },
+        legend: { position: 'bottom', horizontalAlign: 'center' },
         tooltip: {
-          shared: true,
-          intersect: false,
-          y: {
-            formatter: function (val) {
-              if (val === null) return 'No data';
-              return comparisonDataType === 'price'
-                ? '₱' + val.toFixed(2)
-                : val.toFixed(2) + ' Kg';
-            }
-          }
+          shared: true, intersect: false,
+          y: { formatter: val => val == null ? 'No data' : comparisonDataType === 'price' ? '₱' + val.toFixed(2) : val.toFixed(2) + ' Kg' }
         },
         grid: { borderColor: '#e7e7e7', strokeDashArray: 4 }
       }
@@ -1000,7 +938,7 @@ CONFIG = {
           }
         ],
         title: {
-          text: `📊 ${chartCommodity} (Per Kg.) - Volume vs Price Analysis`,
+          text: `📊 ${chartCommodity} - Volume vs Price Analysis`,
           align: 'left',
           style: { fontSize: '18px', fontWeight: 'bold' }
         },
@@ -1071,7 +1009,7 @@ CONFIG = {
           labels: { formatter: function (val) { return '₱' + val.toFixed(0); } }
         },
         title: {
-          text: `💰 ${chartCommodity} (Per Kg.) - Weekly Price Range Breakdown`,
+          text: `💰 ${chartCommodity} - Weekly Price Range Breakdown`,
           align: 'left',
           style: { fontSize: '18px', fontWeight: 'bold' }
         },
@@ -1118,7 +1056,7 @@ CONFIG = {
           title: { text: forecastResult.data_type === 'price' ? 'Price (₱)' : 'Volume (Kg)' }
         },
         title: {
-          text: `🔮 ${mode.charAt(0).toUpperCase() + mode.slice(1)} Forecast: ${forecastResult.commodity} (Per Kg.)`,
+          text: `🔮 ${mode.charAt(0).toUpperCase() + mode.slice(1)} Forecast: ${forecastResult.commodity}`,
           align: 'left'
         },
         legend: { position: 'top', horizontalAlign: 'right' },
@@ -1153,7 +1091,7 @@ CONFIG = {
   if (!dashboardData) {
     return (
       <div className={`min-h-screen ${darkMode ? "bg-slate-950" : "bg-gradient-to-br from-green-50 to-blue-50"} flex items-center justify-center transition-colors duration-300`}>
-        <Loading fullScreen={false} text="Loading dashboard data..." />
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }
@@ -2133,8 +2071,8 @@ CONFIG = {
                 <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm transition-colors`}>
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div>
-                      <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Market Comparison</h3>
-                      <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Contrast prices and volumes across multiple commodities</p>
+                      <h3 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Year-over-Year Comparison</h3>
+                      <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Compare monthly averages across all years for a single commodity</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center gap-2">
@@ -2144,49 +2082,30 @@ CONFIG = {
                           onChange={(e) => setComparisonDataType(e.target.value)}
                           className={`text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
                         >
+                          <option value="price">💰 Price (₱/Kg)</option>
                           <option value="volume">📦 Volume (Kg)</option>
-                          <option value="price">💰 Price (₱)</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Year:</label>
-                        <select
-                          value={comparisonYearFilter}
-                          onChange={(e) => setComparisonYearFilter(e.target.value)}
-                          className={`text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
-                        >
-                          <option value="all">All Years</option>
-                          {availableYears.map(y => (
-                            <option key={y} value={y}>{y}</option>
-                          ))}
                         </select>
                       </div>
                       <button
                         onClick={() => setComparisonCommodities([])}
                         className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-bold"
                       >
-                        Clear Selection
+                        Clear
                       </button>
                     </div>
                   </div>
 
-                  <div className="mb-8">
+                  <div className="mb-4">
                     <label className={`block text-xs font-black ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase tracking-wider mb-3`}>
-                      Select Commodities to Compare (max 5)
+                      Select a Commodity
                     </label>
                     <div className="flex flex-wrap gap-2">
                       {dashboardData?.uniqueCommodities?.map(commodity => {
-                        const isSelected = comparisonCommodities.includes(commodity);
+                        const isSelected = comparisonCommodities[0] === commodity;
                         return (
                           <button
                             key={commodity}
-                            onClick={() => {
-                              if (isSelected) {
-                                setComparisonCommodities(prev => prev.filter(c => c !== commodity));
-                              } else if (comparisonCommodities.length < 5) {
-                                setComparisonCommodities(prev => [...prev, commodity]);
-                              }
-                            }}
+                            onClick={() => setComparisonCommodities([commodity])}
                             className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border
                               ${isSelected
                                 ? (darkMode ? 'bg-green-600 border-green-500 text-white shadow-lg' : 'bg-green-600 border-green-600 text-white shadow-md')
@@ -2201,30 +2120,82 @@ CONFIG = {
                       })}
                     </div>
                   </div>
-
-                  {comparisonCommodities.length > 0 && (
-                    <div className={`mt-3 text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
-                      <span className="font-semibold">{comparisonCommodities.length}</span> commodities selected (max 5)
-                    </div>
-                  )}
                 </div>
 
-                {comparisonCommodities.length > 0 && (
-                  <>
-                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
-                      <ReactApexChart options={multiBarChart.options} series={multiBarChart.series} type="bar" height={400} />
-                    </div>
-                    <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
-                      <ReactApexChart options={trendLineChart.options} series={trendLineChart.series} type="line" height={400} />
-                    </div>
-                  </>
-                )}
+                {comparisonCommodities.length > 0 && (() => {
+                  const commodity = comparisonCommodities[0];
+                  const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
+                  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                  const years = [...new Set(
+                    sourceData.filter(d => getBaseCommodityName(d.commodity) === commodity).map(d => d.year)
+                  )].sort();
+
+                  const tableData = monthNames.map((month, mi) => {
+                    const row = { month };
+                    years.forEach(year => {
+                      const rows = sourceData.filter(d =>
+                        getBaseCommodityName(d.commodity) === commodity &&
+                        d.year === year && d.month === mi + 1
+                      );
+                      const vals = rows.map(d => comparisonDataType === 'volume' ? d.volume : d.average_price).filter(v => v != null);
+                      row[year] = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) : null;
+                    });
+                    return row;
+                  });
+
+                  return (
+                    <>
+                      {/* Bar Chart */}
+                      <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                        <ReactApexChart options={multiBarChart.options} series={multiBarChart.series} type="bar" height={420} />
+                      </div>
+
+                      {/* Line Chart */}
+                      <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border p-6 transition-colors`}>
+                        <ReactApexChart options={trendLineChart.options} series={trendLineChart.series} type="line" height={420} />
+                      </div>
+
+                      {/* Monthly Data Table */}
+                      <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg border overflow-hidden transition-colors`}>
+                        <div className={`px-6 py-4 border-b ${darkMode ? "border-slate-800" : "border-gray-200"}`}>
+                          <h4 className={`font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                            Monthly Average {comparisonDataType === 'price' ? 'Prices (₱/Kg)' : 'Volume (Kg)'} — {commodity}
+                          </h4>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className={`min-w-full divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
+                            <thead className={darkMode ? "bg-slate-800" : "bg-gray-50"}>
+                              <tr>
+                                <th className={`px-4 py-3 text-left text-xs font-bold uppercase ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Month</th>
+                                {years.map(y => (
+                                  <th key={y} className={`px-4 py-3 text-center text-xs font-bold uppercase ${darkMode ? "text-slate-400" : "text-gray-500"}`}>{y}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className={`divide-y ${darkMode ? "divide-slate-800 bg-slate-900" : "divide-gray-100 bg-white"}`}>
+                              {tableData.map((row, i) => (
+                                <tr key={i} className={darkMode ? "hover:bg-slate-800/50" : "hover:bg-gray-50"}>
+                                  <td className={`px-4 py-2 text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-900"}`}>{row.month}</td>
+                                  {years.map(y => (
+                                    <td key={y} className={`px-4 py-2 text-sm text-center ${darkMode ? "text-slate-300" : "text-gray-700"}`}>
+                                      {row[y] != null ? (comparisonDataType === 'price' ? `₱${row[y]}` : row[y]) : '—'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {comparisonCommodities.length === 0 && (
                   <div className={`${darkMode ? "bg-slate-800/50 text-slate-400" : "bg-gray-50 text-gray-600"} text-center py-12 rounded-lg`}>
                     <div className="text-6xl mb-4">📊</div>
-                    <h3 className={`text-xl font-semibold ${darkMode ? "text-white" : "text-gray-900"} mb-2`}>Select Commodities to Compare</h3>
-                    <p className={`${darkMode ? "text-slate-400" : "text-gray-600"}`}>Choose up to 5 commodities from the list above to see comparison charts</p>
+                    <h3 className={`text-xl font-semibold ${darkMode ? "text-white" : "text-gray-900"} mb-2`}>Select a Commodity</h3>
+                    <p className={`${darkMode ? "text-slate-400" : "text-gray-600"}`}>Pick a commodity above to see its year-over-year comparison</p>
                   </div>
                 )}
               </div>
@@ -2284,7 +2255,7 @@ CONFIG = {
                         <thead className={darkMode ? "bg-slate-800/50" : "bg-gray-50"}>
                           <tr>
                             <th className={`px-6 py-3 text-left text-xs font-black ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Period</th>
-                            <th className={`px-6 py-3 text-left text-xs font-black ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Predicted Value</th>
+                            <th className={`px-6 py-3 text-left text-xs font-black ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Forecasted Value</th>
                           </tr>
                         </thead>
                         <tbody className={`${darkMode ? "bg-slate-900" : "bg-white"} divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>

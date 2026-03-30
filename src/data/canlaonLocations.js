@@ -11,16 +11,16 @@ const canlaonLocations = {
   "Binalbagan": {
     coordinates: [10.3650, 123.2150],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3652, 123.2148] },
-      { name: "Purok 2", coordinates: [10.3648, 123.2152] },
-      { name: "Sitio X", coordinates: [10.3654, 123.2146] },
+      { name: "Upper Bonbon", coordinates: [10.377975, 123.248355] },
+      { name: "So. Urban", coordinates: [10.379108, 123.248024] },
+      { name: "So. Nabulu-an", coordinates: [10.378966, 123.247184] },
       { name: "Sitio Y", coordinates: [10.3646, 123.2154] },
     ],
   },
   "Bucalan (East Budsalan)": {
     coordinates: [10.3900, 123.2300],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3902, 123.2298] },
+      { name: "So.Pinamemtigan", coordinates: [10.328805, 123.202215] },
       { name: "Purok 2", coordinates: [10.3898, 123.2302] },
       { name: "Sitio C", coordinates: [10.3904, 123.2296] },
       { name: "Sitio D", coordinates: [10.3896, 123.2304] },
@@ -29,7 +29,7 @@ const canlaonLocations = {
   "Budlasan (West Budsalan)": {
     coordinates: [10.3850, 123.2200],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3852, 123.2198] },
+      { name: "So.Pinamemtigan", coordinates: [10.3852, 123.2198] },
       { name: "Purok 2", coordinates: [10.3848, 123.2202] },
       { name: "Sitio E", coordinates: [10.3854, 123.2196] },
       { name: "Sitio F", coordinates: [10.3846, 123.2204] },
@@ -54,7 +54,7 @@ const canlaonLocations = {
       { name: "Purok Star Apple", coordinates: [10.433638, 123.215979] },
       { name: "Purok Rambutan", coordinates: [10.426238, 123.219245] },
       { name: "Purok Tambis", coordinates: [10.435983, 123.227080] },
-    ],  
+    ],
   },
   "Malaiba": {
     coordinates: [10.3750, 123.2250],
@@ -68,10 +68,14 @@ const canlaonLocations = {
   "Masulog": {
     coordinates: [10.3950, 123.2350],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3952, 123.2348] },
-      { name: "Purok 2", coordinates: [10.3948, 123.2352] },
-      { name: "Sitio K", coordinates: [10.3954, 123.2346] },
-      { name: "Sitio L", coordinates: [10.3946, 123.2354] },
+      { name: "So.Matagbak", coordinates: [10.368049, 123.180568] },
+      { name: "Proper", coordinates: [10.367294, 123.180661] },
+      { name: "So.Mananawin", coordinates: [10.373013, 123.177932] },
+      { name: "So. Lagubo", coordinates: [10.368582, 123.182526] },
+      { name: "So.Upper Magnanawin", coordinates: [10.366584, 123.180755] },
+      { name: "So. Alabasi", coordinates: [10.365560, 123.181350] },
+      { name: "So. Manggapa", coordinates: [10.369097, 123.181395] },
+      { name: "So. Agho", coordinates: [10.369325, 123.181818] },
     ],
   },
   "Panubigan": {
@@ -86,7 +90,7 @@ const canlaonLocations = {
   "Mabigo (Pob.)": {
     coordinates: [10.3860, 123.2220],
     sitios: [
-      { name: "Purok 1", coordinates: [10.3862, 123.2218] },
+      { name: "So. Angas II", coordinates: [10.388965, 123.222824] },
       { name: "Purok 2", coordinates: [10.3858, 123.2222] },
       { name: "Sitio Q", coordinates: [10.3864, 123.2216] },
       { name: "Sitio R", coordinates: [10.3856, 123.2224] },
@@ -95,7 +99,7 @@ const canlaonLocations = {
   "Pula": {
     coordinates: [10.4100, 123.2450],
     sitios: [
-      { name: "Purok 1", coordinates: [10.405776, 123.175428] },
+      { name: "Upper", coordinates: [10.402970, 123.183824] },
       { name: "Purok 2", coordinates: [10.4098, 123.2452] },
       { name: "Sitio S", coordinates: [10.4104, 123.2446] },
       { name: "Sitio T", coordinates: [10.4096, 123.2454] },

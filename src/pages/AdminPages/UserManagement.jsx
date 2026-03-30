@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import { useTheme } from "../../context/ThemeContext";
 import { auth, db, firebaseConfig } from "../../firebase";
 import { logActivity } from "../../services/activityLogger";
@@ -100,7 +101,7 @@ const UserManagement = () => {
       });
       setEditingUser(null);
       fetchUsers();
-      logActivity('update', 'User', editingUser.fullName);
+      logActivity('update', 'User', editingUser.fullName, auth.currentUser?.displayName || 'Admin');
       alert("User updated successfully!");
     } catch (err) {
       setError("Error updating user: " + err.message);
@@ -128,7 +129,7 @@ const UserManagement = () => {
         }
 
         fetchUsers();
-        logActivity('delete', 'User', user.fullName);
+        logActivity('delete', 'User', user.fullName, auth.currentUser?.displayName || 'Admin');
         alert("User deleted successfully!");
       } catch (err) {
         setError("Error deleting user: " + err.message);
@@ -268,7 +269,7 @@ const UserManagement = () => {
       setShowPassword(false);
       setShowConfirmPassword(false);
       fetchUsers();
-      logActivity('add', 'User', newUser.fullName);
+      logActivity('add', 'User', newUser.fullName, auth.currentUser?.displayName || 'Admin');
       alert("User added successfully!");
     } catch (err) {
       console.error(err);
@@ -285,7 +286,7 @@ const UserManagement = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950">
-        <FaSpinner className="text-4xl text-green-600 animate-spin" />
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }

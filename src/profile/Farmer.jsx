@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db } from "../config/firebaseConfig";
+import { db, auth } from "../config/firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
 import { collection, getDocs, query, where, updateDoc, deleteDoc, doc, addDoc } from "firebase/firestore";
 import { logActivity } from "../services/activityLogger";
@@ -330,7 +330,7 @@ const Farmer = () => {
       setFarmerVegetables([]);
       setOriginalVegetables([]);
       setUpdateHighlights({});
-      logActivity('update', 'Farmer', editForm.fullName);
+      logActivity('update', 'Farmer', editForm.fullName, auth.currentUser?.displayName || 'Admin');
       alert("Farmer updated successfully!");
     } catch (error) {
       console.error("Error updating farmer:", error);
@@ -353,7 +353,7 @@ const Farmer = () => {
         await Promise.all(deletePromises);
         setFarmers((prev) => prev.filter((farmer) => farmer.id !== farmerId));
         const deletedFarmer = farmers.find((f) => f.id === farmerId);
-        logActivity('delete', 'Farmer', deletedFarmer?.fullName || farmerId);
+        logActivity('delete', 'Farmer', deletedFarmer?.fullName || farmerId, auth.currentUser?.displayName || 'Admin');
         alert("Farmer deleted successfully!");
       } catch (error) {
         console.error("Error deleting farmer:", error);

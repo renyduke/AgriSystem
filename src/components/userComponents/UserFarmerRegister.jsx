@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../../config/firebaseConfig";
+import { db, auth } from "../../config/firebaseConfig";
 import { collection, addDoc, getDocs } from "firebase/firestore";
 import { logActivity } from "../../services/activityLogger";
 import { FaUser, FaPhone, FaMapMarkerAlt, FaTractor, FaPlus, FaCalendarAlt, FaTimes, FaInfoCircle, FaSpinner, FaCheckCircle } from "react-icons/fa";
@@ -24,6 +24,7 @@ const FarmerRegister = () => {
     hectares: "",
     areaInSqm: "", // Added for calculation
     landOwnership: "",
+    otherLandOwnership: "",
     mainCrops: [],
     area: [],
     coordinates: [10.3860, 123.2220],
@@ -115,6 +116,10 @@ const FarmerRegister = () => {
       }
 
       const updatedData = { ...prevData, [name]: updatedValue };
+
+      if (name === "landOwnership" && value !== "Others") {
+        updatedData.otherLandOwnership = "";
+      }
 
       if ((name === "farmBarangay" || name === "farmSitio" || name === "hectares") && updatedData.farmBarangay && updatedData.farmSitio && updatedData.hectares) {
         const barangayData = canlaonLocations[updatedData.farmBarangay];
@@ -264,7 +269,7 @@ const FarmerRegister = () => {
         farmLocation: `${farmerData.farmBarangay}, ${farmerData.farmSitio}, Canlaon City`,
         hectares: parseFloat(farmerData.hectares),
         areaInSqm: parseFloat(farmerData.areaInSqm),
-        landOwnership: farmerData.landOwnership,
+        landOwnership: farmerData.landOwnership === "Others" ? farmerData.otherLandOwnership : farmerData.landOwnership,
         mainCrops: flattenedCrops,
         area: farmerData.area,
       });
@@ -278,7 +283,7 @@ const FarmerRegister = () => {
       );
       await Promise.all(vegetablePromises);
 
-      logActivity('add', 'Farmer', `${capitalizeFirstLetter(farmerData.firstName)} ${capitalizeFirstLetter(farmerData.lastName)}`);
+      logActivity('add', 'Farmer', `${capitalizeFirstLetter(farmerData.firstName)} ${capitalizeFirstLetter(farmerData.lastName)}`, auth.currentUser?.displayName || 'Admin');
       setLocalReply({ type: "success", message: "Farmer registered successfully (Localhost)" });
       setShowMapPreview(true);
       setFarmerData({
@@ -294,6 +299,7 @@ const FarmerRegister = () => {
         hectares: "",
         areaInSqm: "",
         landOwnership: "",
+        otherLandOwnership: "",
         mainCrops: [],
         area: [],
         coordinates: [10.3860, 123.2220],
@@ -574,12 +580,28 @@ const FarmerRegister = () => {
                       <option value="Owned" className="bg-white dark:bg-slate-800">Owned</option>
                       <option value="Tenant" className="bg-white dark:bg-slate-800">Tenant</option>
                       <option value="Lessee" className="bg-white dark:bg-slate-800">Lessee</option>
+                      <option value="Others" className="bg-white dark:bg-slate-800">Others</option>
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
                       <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                     </div>
                   </div>
                 </div>
+
+                {farmerData.landOwnership === "Others" && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Specify Ownership</label>
+                    <input
+                      type="text"
+                      name="otherLandOwnership"
+                      placeholder="Please specify"
+                      value={farmerData.otherLandOwnership}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               {farmerData.coordinates && showMapPreview && (

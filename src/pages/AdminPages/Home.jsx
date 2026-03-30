@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import { useTheme } from "../../context/ThemeContext";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
@@ -356,10 +357,7 @@ const Home = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-green-200 dark:border-slate-800 border-t-green-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
-        </div>
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }

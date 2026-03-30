@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import ReactApexChart from "react-apexcharts";
 import { useTheme } from "../../context/ThemeContext";
 import { db } from "../../config/firebaseConfig";
@@ -323,10 +324,7 @@ const Reports = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center">
-        <div className="text-center">
-          <FaSpinner className="text-6xl text-green-600 animate-spin mx-auto mb-4" />
-          <p className="text-green-800 font-semibold text-lg">Generating reports...</p>
-        </div>
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }

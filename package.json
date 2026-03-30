@@ -30,6 +30,7 @@
     "react-leaflet": "^5.0.0",
     "react-leaflet-draw": "^0.21.0",
     "react-leaflet-markercluster": "^5.0.0-rc.0",
+    "react-loading-indicators": "^1.0.1",
     "react-router-dom": "^7.9.4",
     "tailwindcss": "^4.0.6"
   },

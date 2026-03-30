@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { OrbitProgress } from 'react-loading-indicators';
 import { db } from '../../config/firebaseConfig';
 import { useTheme } from '../../context/ThemeContext';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -248,10 +249,7 @@ const FarmerBankingPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading farmer banking data...</p>
-        </div>
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import { useTheme } from "../context/ThemeContext";
-import { db } from "../config/firebaseConfig";
+import { db, auth } from "../config/firebaseConfig";
 import {
   collection,
   getDocs,
@@ -60,6 +61,29 @@ const Vegetables = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const validateVegetableName = (name) => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) return "Name is too short (minimum 2 characters).";
+    if (trimmed.length > 30) return "Name is too long (maximum 30 characters).";
+    
+    // Only letters, spaces, and hyphens
+    if (!/^[A-Za-z\s-]+$/.test(trimmed)) {
+      return "Name can only contain letters, spaces, and hyphens.";
+    }
+
+    // Check for vowels (basic gibberish check)
+    if (!/[aeiou]/i.test(trimmed)) {
+      return "Please enter a valid vegetable name (missing vowels).";
+    }
+
+    // Check for excessive repetitive characters (e.g., "aaa")
+    if (/(.)\1\1/.test(trimmed)) {
+      return "Name contains too many repetitive characters.";
+    }
+
+    return null; // Valid
+  };
+
   useEffect(() => {
     fetchVegetables();
   }, []);
@@ -88,7 +112,11 @@ const Vegetables = () => {
 
   const handleAddVegetable = async (e) => {
     e.preventDefault();
-    if (!newVeggieName.trim()) return;
+    const error = validateVegetableName(newVeggieName);
+    if (error) {
+      alert(error);
+      return;
+    }
 
     if (vegetables.some((v) => v.name.toLowerCase() === newVeggieName.trim().toLowerCase())) {
       alert("This vegetable already exists in the list");
@@ -102,7 +130,7 @@ const Vegetables = () => {
       });
       setNewVeggieName("");
       await fetchVegetables();
-      logActivity('add', 'Vegetable', newVeggieName.trim());
+      logActivity('add', 'Vegetable', newVeggieName.trim(), auth.currentUser?.displayName || 'Admin');
       showNotification("Vegetable added successfully!");
     } catch (error) {
       console.error("Error adding vegetable:", error);
@@ -113,6 +141,12 @@ const Vegetables = () => {
 
   const handleEditVegetable = async (veggie) => {
     if (editVeggieName.trim() && editVeggieName !== veggie.name) {
+      const error = validateVegetableName(editVeggieName);
+      if (error) {
+        alert(error);
+        return;
+      }
+
       if (vegetables.some(
         (v) => v.name.toLowerCase() === editVeggieName.trim().toLowerCase() && v.id !== veggie.id
       )) {
@@ -129,7 +163,7 @@ const Vegetables = () => {
         setEditingVeggie(null);
         setEditVeggieName("");
         await fetchVegetables();
-        logActivity('update', 'Vegetable', editVeggieName.trim());
+        logActivity('update', 'Vegetable', editVeggieName.trim(), auth.currentUser?.displayName || 'Admin');
         showNotification("Vegetable updated successfully!");
       } catch (error) {
         console.error("Error editing vegetable:", error);
@@ -149,7 +183,7 @@ const Vegetables = () => {
         const deletedVeg = vegetables.find((v) => v.id === veggieId);
         await deleteDoc(doc(db, "vegetables_list", veggieId));
         await fetchVegetables();
-        logActivity('delete', 'Vegetable', deletedVeg?.name || veggieId);
+        logActivity('delete', 'Vegetable', deletedVeg?.name || veggieId, auth.currentUser?.displayName || 'Admin');
         showNotification("Vegetable deleted successfully");
       } catch (error) {
         console.error("Error deleting vegetable:", error);
@@ -165,8 +199,8 @@ const Vegetables = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 px-6 pt-2 pb-6 font-sans transition-colors duration-300">
-        <div className="w-full space-y-8">
+      <div className="h-screen bg-gray-50 dark:bg-slate-950 px-6 pt-2 pb-6 font-sans transition-colors duration-300 overflow-hidden flex flex-col">
+        <div className="w-full space-y-6 flex-1 flex flex-col overflow-hidden">
 
           {/* Header Section */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
@@ -202,11 +236,11 @@ const Vegetables = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 overflow-hidden">
 
             {/* Add New Vegetable Card */}
-            <div className="lg:col-span-1">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 sticky top-8">
+            <div className="lg:col-span-1 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                     <Sprout className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -232,7 +266,7 @@ const Vegetables = () => {
                     disabled={loading || !newVeggieName.trim()}
                     className="w-full py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 font-semibold shadow-md shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Plus className="w-5 h-5" />}
+                    {loading ? <OrbitProgress variant="dotted" color="#ffffff" size="small" text="" textColor="" /> : <Plus className="w-5 h-5" />}
                     Add Vegetable
                   </button>
                 </form>
@@ -247,10 +281,10 @@ const Vegetables = () => {
             </div>
 
             {/* Vegetable Grid */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 overflow-y-auto pr-2 custom-scrollbar">
               {loading && vegetables.length === 0 ? (
                 <div className="flex items-center justify-center h-64">
-                  <Loading fullScreen={false} />
+                  <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
                 </div>
               ) : filteredVegetables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500">
@@ -328,8 +362,29 @@ const Vegetables = () => {
                   ))}
                 </div>
               )}
-            </div>
           </div>
+        </div>
+        <style jsx>{`
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+          }
+          .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #cbd5e1;
+          }
+          .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+          }
+        `}</style>
         </div>
       </div>
     </ErrorBoundary>

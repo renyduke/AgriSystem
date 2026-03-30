@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { OrbitProgress } from 'react-loading-indicators';
 import { useTheme } from "../../context/ThemeContext";
 import ReactApexChart from "react-apexcharts";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -265,7 +266,7 @@ const AgriDashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
-        <Loading fullScreen={false} text="Loading analytics data..." />
+        <OrbitProgress variant="dotted" color="#32cd32" size="medium" text="" textColor="" />
       </div>
     );
   }
