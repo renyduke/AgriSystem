@@ -92,6 +92,7 @@ const Dashboard = () => {
   // Training State
   const [isTraining, setIsTraining] = useState(false);
   const [trainingLogs, setTrainingLogs] = useState([]);
+  const [devMode, setDevMode] = useState(false);
   const logsEndRef = React.useRef(null);
   const wsRef = React.useRef(null);
 
@@ -107,6 +108,22 @@ const Dashboard = () => {
         wsRef.current.close();
       }
     };
+  }, []);
+
+  // Dev mode toggle: Ctrl + Shift + D
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        setDevMode(prev => {
+          const next = !prev;
+          if (!next) setActiveTab(tab => tab === 'training' ? 'overview' : tab);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // ============================================================================
@@ -1218,7 +1235,14 @@ CONFIG = {
       </div>
 
       {/* Header */}
-      <h1 className={`text-3xl font-bold ${darkMode ? "text-slate-100" : "text-slate-800"} mb-2`}>AgriData Analytics Dashboard</h1>
+      <div className="flex items-center gap-3 mb-2">
+        <h1 className={`text-3xl font-bold ${darkMode ? "text-slate-100" : "text-slate-800"}`}>AgriData Analytics Dashboard</h1>
+        {devMode && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 border border-purple-300 dark:border-purple-700 tracking-widest uppercase">
+            Dev Mode
+          </span>
+        )}
+      </div>
       <p className={`text-sm ${darkMode ? "text-slate-400" : "text-slate-500"} mb-8`}>Multi-Period Agricultural Forecasting & Analysis</p>
 
       {/* Main Content */}
@@ -1373,7 +1397,7 @@ CONFIG = {
                 { key: 'commodity', label: '📈 Commodity Charts' },
                 { key: 'comparison', label: '📊 Multi-Commodity Comparison' },
                 { key: 'forecast', label: '🔮 Forecast Results' },
-                { key: 'training', label: '🏋️ Training & Models' },
+                ...(devMode ? [{ key: 'training', label: '🏋️ Training & Models' }] : []),
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -1814,7 +1838,7 @@ CONFIG = {
             )}
 
             {/* TRAINING TAB */}
-            {activeTab === 'training' && (
+            {activeTab === 'training' && devMode && (
               <div className="space-y-8">
                 {modelInfo && modelInfo.models && (
                   <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-200"} rounded-lg p-6 border shadow-sm relative overflow-hidden transition-colors`}>
