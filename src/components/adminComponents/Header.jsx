@@ -4,7 +4,7 @@ import { supabase } from '../../supabase/supabaseClient';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { LogOut, Sun, Moon, Bell } from "lucide-react";
+import { LogOut, Sun, Moon, Bell, RefreshCw } from "lucide-react";
 import NotificationDropdown from './NotificationDropdown';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -108,6 +108,13 @@ const Header = () => {
     }
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => window.location.reload(), 400);
+  };
+
   return (
     <header className="bg-white dark:bg-slate-900 shadow-sm sticky top-0 z-40 w-full h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-slate-800 transition-colors duration-300">
       
@@ -121,6 +128,15 @@ const Header = () => {
         
         {/* Notification Icon Component */}
         <NotificationDropdown />
+
+        {/* Refresh Button */}
+        <button
+          onClick={handleRefresh}
+          className="p-2 rounded-lg bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all duration-200 border border-gray-200 dark:border-slate-700 shadow-sm active:scale-95"
+          title="Refresh page"
+        >
+          <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-green-500' : ''}`} />
+        </button>
 
         {/* Dark Mode Toggle */}
         <button

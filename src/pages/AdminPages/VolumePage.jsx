@@ -47,6 +47,13 @@ const deduplicateCommodities = (commodityList) => {
   return [...seen.values()];
 };
 
+// Format volume: >= 1000 kg shows as tons, otherwise kg
+const formatVolume = (kg) => {
+  if (!kg || kg <= 0) return '';
+  if (kg >= 1000) return (kg / 1000).toFixed(2) + ' t';
+  return kg.toFixed(2) + ' kg';
+};
+
 const VolumePage = () => {
   const { darkMode } = useTheme();
   const [volumeData, setVolumeData] = useState([]);
@@ -175,6 +182,7 @@ const VolumePage = () => {
     }
     const weekSet = new Map();
     filtered.forEach(d => {
+      if (d.week === 5) return; // no week 5
       const key = `${d.year}-${d.month}-${d.week}`;
       if (!weekSet.has(key)) {
         weekSet.set(key, {
@@ -201,6 +209,7 @@ const VolumePage = () => {
     if (selectedYear !== 'all') filteredData = filteredData.filter(d => d.year === parseInt(selectedYear));
     if (selectedMonth !== 'all') filteredData = filteredData.filter(d => d.month === parseInt(selectedMonth));
     if (selectedWeek !== 'all') filteredData = filteredData.filter(d => d.week === parseInt(selectedWeek));
+    filteredData = filteredData.filter(d => d.week !== 5);
 
     const weeklyGroups = {};
     filteredData.forEach(item => {
@@ -243,25 +252,25 @@ const VolumePage = () => {
       const weekLabel = getWeekFullLabel(data);
       csv += `\n${weekLabel}\n`;
       csv += '\n1. HIGH VALUE CROP COMMODITY VOLUME\n';
-      csv += 'No.,Commodity,Volume (Kg),Remarks\n';
+      csv += 'No.,Commodity,Volume,Remarks\n';
       let vegTotal = 0;
       vegetableCommodities.forEach((c, i) => {
         const vol = data.commodityVolumes[getBaseCommodityName(c)] || 0;
-        csv += `${i + 1},"${formatCommodityName(c)}",${vol > 0 ? vol.toFixed(2) + ' kg' : ''},\n`;
+        csv += `${i + 1},"${formatCommodityName(c)}",${vol > 0 ? formatVolume(vol) : ''},\n`;
         vegTotal += vol;
       });
-      csv += `,,${vegTotal.toFixed(2)} kg,Subtotal\n`;
+      csv += `,,${formatVolume(vegTotal)},Subtotal\n`;
 
       if (riceCornCommodities.length > 0) {
         csv += '\n2. RICE & CORN COMMODITY VOLUME\n';
-        csv += 'No.,Commodity,Volume (Kg),Remarks\n';
+        csv += 'No.,Commodity,Volume,Remarks\n';
         let rcTotal = 0;
         riceCornCommodities.forEach((c, i) => {
           const vol = data.commodityVolumes[getBaseCommodityName(c)] || 0;
-          csv += `${i + 1},"${formatCommodityName(c)}",${vol > 0 ? vol.toFixed(2) + ' kg' : ''},\n`;
+          csv += `${i + 1},"${formatCommodityName(c)}",${vol > 0 ? formatVolume(vol) : ''},\n`;
           rcTotal += vol;
         });
-        csv += `,,${rcTotal.toFixed(2)} kg,Subtotal\n`;
+        csv += `,,${formatVolume(rcTotal)},Subtotal\n`;
       }
     });
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -284,7 +293,7 @@ const VolumePage = () => {
         <tr>
           <td>${idx + 1}</td>
           <td style="text-align: left; padding-left: 8px;">${formatCommodityName(commodity)}</td>
-          <td>${volume > 0 ? volume.toFixed(2) + ' kg' : ''}</td>
+          <td>${volume > 0 ? formatVolume(volume) : ''}</td>
           <td></td>
         </tr>
       `;
@@ -292,7 +301,7 @@ const VolumePage = () => {
     html += `
       <tr style="font-weight: bold; background-color: #f0f0f0;">
         <td colspan="2" style="text-align: right; padding-right: 8px;">Subtotal</td>
-        <td>${sectionTotal > 0 ? sectionTotal.toFixed(2) + ' kg' : ''}</td>
+        <td>${sectionTotal > 0 ? formatVolume(sectionTotal) : ''}</td>
         <td></td>
       </tr>
     `;
@@ -459,7 +468,7 @@ const VolumePage = () => {
                       formatCommodityName(commodity)
                     )}
                   </td>
-                  <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{volume > 0 ? `${volume.toFixed(2)} kg` : ''}</td>
+                  <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{formatVolume(volume)}</td>
                   <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-500 border-slate-700" : "text-gray-500 border-gray-300"} border`}></td>
                   <td className={`px-4 py-2 text-center text-sm ${darkMode ? "text-slate-300 border-slate-700" : "text-gray-900 border-gray-300"} border`}>
                     <div className="flex items-center justify-center gap-3">
@@ -509,7 +518,7 @@ const VolumePage = () => {
             })}
             <tr className={`${darkMode ? "bg-slate-800" : "bg-gray-200"} font-bold`}>
               <td colSpan={2} className={`px-4 py-3 text-right text-sm font-bold ${darkMode ? "text-slate-200 border-slate-700" : "text-gray-900 border-gray-300"} border`}>Subtotal</td>
-              <td className={`px-4 py-3 text-center text-sm font-bold ${darkMode ? "text-slate-200 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{sectionTotal > 0 ? `${sectionTotal.toFixed(2)} kg` : ''}</td>
+              <td className={`px-4 py-3 text-center text-sm font-bold ${darkMode ? "text-slate-200 border-slate-700" : "text-gray-900 border-gray-300"} border`}>{formatVolume(sectionTotal)}</td>
               <td className={`px-4 py-3 border ${darkMode ? "border-slate-700" : "border-gray-300"}`}></td>
               <td className={`px-4 py-3 border ${darkMode ? "border-slate-700" : "border-gray-300"}`}></td>
             </tr>

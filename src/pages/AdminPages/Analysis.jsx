@@ -7,8 +7,10 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { db } from "../../config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
-import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt } from "react-icons/fa";
+import axios from "axios";
+import { FaSpinner, FaTractor, FaChartBar, FaChartLine, FaLeaf, FaChartPie, FaArrowLeft, FaArrowRight, FaUser, FaSeedling, FaMapMarkedAlt, FaFilter } from "react-icons/fa";
 import Loading from "../../components/Loading";
+import API_BASE_URL from "../../config";
 
 // Fix Leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -58,6 +60,16 @@ const AgriDashboard = () => {
   const [topProducingFarmers, setTopProducingFarmers] = useState([]);
   const [landOwnershipDistribution, setLandOwnershipDistribution] = useState([]);
   const startX = useRef(null);
+
+  // Integration state
+  const [marketData, setMarketData] = useState({ volume_data: [], price_data: [] });
+  const [integrationVegFilter, setIntegrationVegFilter] = useState('all');
+  const [integrationYearFilter, setIntegrationYearFilter] = useState('all');
+  const [integrationMonthFilter, setIntegrationMonthFilter] = useState('all');
+  const [integrationWeekFilter, setIntegrationWeekFilter] = useState('all');
+
+  // Average yield per hectare (kg) — editable assumption per crop
+  const AVG_YIELD_KG_PER_HA = 15000;
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -142,10 +154,20 @@ const AgriDashboard = () => {
           .map(farmer => ({
             name: farmer.name,
             production: Number(farmer.hectares) || 0,
+            vegetable: farmer.vegetable || 'N/A',
+            location: farmer.farmLocation || 'Unknown',
           }))
           .sort((a, b) => b.production - a.production)
           .slice(0, 5);
         setTopProducingFarmers(topFarmers);
+
+        // Fetch market data from backend
+        try {
+          const marketRes = await axios.get(`${API_BASE_URL}/api/dashboard`);
+          setMarketData(marketRes.data);
+        } catch (e) {
+          console.warn('Market data unavailable:', e.message);
+        }
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -263,6 +285,335 @@ const AgriDashboard = () => {
     plotOptions: { pie: { donut: { size: '65%' } } }
   };
 
+  // Hectares by farmer & vegetable — multi-line chart
+  const allVegetables = [...new Set(farmersData.map(f => f.vegetable || 'N/A'))];
+  const farmerNames = farmersData.map(f => f.name || 'Unknown');
+  const farmerLocations = farmersData.map(f => {
+    // Extract just the barangay part (first segment before comma)
+    const loc = f.farmLocation || f.address || 'Unknown';
+    return loc.split(',')[0].trim();
+  });
+
+  const farmerHectaresSeries = allVegetables.map(veg => ({
+    name: veg,
+    data: farmersData.map(f =>
+      (f.vegetable || 'N/A') === veg ? parseFloat((Number(f.hectares) || 0).toFixed(2)) : 0
+    )
+  })).filter(s => s.data.some(v => v > 0));
+
+  const farmerHectaresOptions = {
+    ...commonChartOptions,
+    chart: {
+      ...commonChartOptions.chart,
+      type: 'line',
+      height: 350,
+      dropShadow: { enabled: true, color: '#000', top: 18, left: 7, blur: 10, opacity: 0.2 },
+      zoom: { enabled: false },
+      toolbar: { show: true },
+    },
+    colors: COLORS,
+    stroke: { curve: 'smooth', width: 2 },
+    dataLabels: { enabled: false },
+    markers: { size: 4, hover: { size: 6 } },
+    xaxis: {
+      categories: farmerNames,
+      title: { text: 'Farmer', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+      labels: {
+        rotate: -40,
+        style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '11px' },
+      },
+    },
+    yaxis: {
+      title: { text: 'Hectares (ha)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+      labels: {
+        style: { colors: darkMode ? '#94a3b8' : '#64748b' },
+        formatter: val => `${val} ha`,
+      },
+      min: 0,
+    },
+    grid: {
+      borderColor: darkMode ? '#1e293b' : '#e7e7e7',
+      row: { colors: [darkMode ? '#0f172a' : '#f3f3f3', 'transparent'], opacity: 0.5 },
+    },
+    legend: { position: 'top', horizontalAlign: 'right', floating: true, offsetY: -25, offsetX: -5 },
+    tooltip: {
+      custom: ({ series, seriesIndex, dataPointIndex }) => {
+        const farmer = farmersData[dataPointIndex];
+        const val = series[seriesIndex][dataPointIndex];
+        const location = farmerLocations[dataPointIndex];
+        return `<div style="padding:10px;font-size:12px;line-height:1.6">
+          <strong>${farmer?.name || 'Unknown'}</strong><br/>
+          📍 ${location}<br/>
+          🌿 ${allVegetables[seriesIndex]}: <strong>${val} ha</strong>
+        </div>`;
+      }
+    },
+  };
+
+  // Hectares by location (barangay) — line chart
+  const locationGroups = farmersData.reduce((acc, f) => {
+    const loc = (f.farmLocation || f.address || 'Unknown').split(',')[0].trim();
+    if (!acc[loc]) acc[loc] = { total: 0, farmers: [] };
+    acc[loc].total += Number(f.hectares) || 0;
+    acc[loc].farmers.push(f.name || 'Unknown');
+    return acc;
+  }, {});
+
+  const locationLabels = Object.keys(locationGroups).sort();
+  const locationHectares = locationLabels.map(loc => parseFloat(locationGroups[loc].total.toFixed(2)));
+
+  const locationChartOptions = {
+    ...commonChartOptions,
+    chart: {
+      ...commonChartOptions.chart,
+      type: 'line',
+      height: 300,
+      dropShadow: { enabled: true, color: '#000', top: 18, left: 7, blur: 10, opacity: 0.2 },
+      zoom: { enabled: false },
+      toolbar: { show: true },
+    },
+    colors: ['#10b981'],
+    stroke: { curve: 'smooth', width: 3 },
+    dataLabels: { enabled: true, formatter: val => `${val}ha`, style: { fontSize: '10px' } },
+    markers: { size: 5, hover: { size: 7 } },
+    xaxis: {
+      categories: locationLabels,
+      title: { text: 'Barangay / Location', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+      labels: { rotate: -35, style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '11px' } },
+    },
+    yaxis: {
+      title: { text: 'Total Hectares (ha)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+      labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' }, formatter: val => `${val} ha` },
+      min: 0,
+    },
+    grid: {
+      borderColor: darkMode ? '#1e293b' : '#e7e7e7',
+      row: { colors: [darkMode ? '#0f172a' : '#f3f3f3', 'transparent'], opacity: 0.5 },
+    },
+    legend: { show: false },
+    tooltip: {
+      custom: ({ dataPointIndex }) => {
+        const loc = locationLabels[dataPointIndex];
+        const group = locationGroups[loc];
+        const farmerList = group.farmers.slice(0, 5).join(', ') + (group.farmers.length > 5 ? ` +${group.farmers.length - 5} more` : '');
+        return `<div style="padding:10px;font-size:12px;line-height:1.6">
+          <strong>📍 ${loc}</strong><br/>
+          🌾 Total: <strong>${group.total.toFixed(2)} ha</strong><br/>
+          👨‍🌾 Farmers (${group.farmers.length}): ${farmerList}
+        </div>`;
+      }
+    },
+  };
+
+  // ============================================================================
+  // PRODUCTION vs MARKET VOLUME INTEGRATION CHART
+  // ============================================================================
+
+  const getBaseName = (name) => {
+    if (!name) return '';
+    return name.replace(/\s*\(?(Per\s*)?(Kg\.?|Sack|Piece|Bundle|Pc\.?|Pcs\.?)\)?\s*/gi, '').trim();
+  };
+
+  // All vegetable types present in farmer data
+  const allFarmerVegs = [...new Set(farmersData.map(f => f.vegetable || 'N/A').filter(v => v !== 'N/A'))].sort();
+
+  // All years/months/weeks present in market volume data (cascading)
+  const allMarketYears = [...new Set(marketData.volume_data.map(d => d.year))].sort((a, b) => a - b);
+  const allMarketMonths = [...new Set(
+    marketData.volume_data
+      .filter(d => integrationYearFilter === 'all' || d.year === parseInt(integrationYearFilter))
+      .map(d => d.month)
+  )].sort((a, b) => a - b);
+  const allMarketWeeks = [...new Set(
+    marketData.volume_data
+      .filter(d =>
+        (integrationYearFilter === 'all' || d.year === parseInt(integrationYearFilter)) &&
+        (integrationMonthFilter === 'all' || d.month === parseInt(integrationMonthFilter))
+      )
+      .filter(d => d.week !== 5)
+      .map(d => d.week)
+  )].sort((a, b) => a - b);
+
+  const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Filtered market volume data
+  const filteredMarketVolume = marketData.volume_data.filter(d => {
+    const vegMatch = integrationVegFilter === 'all' || getBaseName(d.commodity).toLowerCase() === integrationVegFilter.toLowerCase();
+    const yearMatch = integrationYearFilter === 'all' || d.year === parseInt(integrationYearFilter);
+    const monthMatch = integrationMonthFilter === 'all' || d.month === parseInt(integrationMonthFilter);
+    const weekMatch = integrationWeekFilter === 'all' || d.week === parseInt(integrationWeekFilter);
+    return vegMatch && yearMatch && monthMatch && weekMatch && d.week !== 5;
+  });
+
+  // Filtered farmer data
+  const filteredFarmerData = farmersData.filter(f =>
+    integrationVegFilter === 'all' || (f.vegetable || 'N/A').toLowerCase() === integrationVegFilter.toLowerCase()
+  );
+
+  // Aggregate: hectares per location per vegetable
+  const locationVegMap = {};
+  filteredFarmerData.forEach(f => {
+    const loc = (f.farmLocation || f.address || 'Unknown').split(',')[0].trim();
+    const veg = f.vegetable || 'N/A';
+    if (!locationVegMap[loc]) locationVegMap[loc] = {};
+    locationVegMap[loc][veg] = (locationVegMap[loc][veg] || 0) + (Number(f.hectares) || 0);
+  });
+
+  const integrationLocations = Object.keys(locationVegMap).sort();
+
+  // Bar series: one per vegetable — hectares per location
+  const vegTypes = integrationVegFilter === 'all'
+    ? [...new Set(filteredFarmerData.map(f => f.vegetable || 'N/A'))]
+    : [integrationVegFilter];
+
+  const barSeries = vegTypes.map(veg => ({
+    name: `${veg} (ha)`,
+    type: 'column',
+    data: integrationLocations.map(loc => parseFloat(((locationVegMap[loc]?.[veg] || 0)).toFixed(2)))
+  }));
+
+  // Estimated production line: hectares × AVG_YIELD_KG_PER_HA per location
+  const estProductionSeries = {
+    name: 'Est. Production (kg)',
+    type: 'line',
+    data: integrationLocations.map(loc => {
+      const totalHa = vegTypes.reduce((sum, veg) => sum + (locationVegMap[loc]?.[veg] || 0), 0);
+      return parseFloat((totalHa * AVG_YIELD_KG_PER_HA).toFixed(0));
+    })
+  };
+
+  // Market volume line: total volume for filtered veg across all locations (single value repeated — shown as reference line)
+  const totalMarketVol = filteredMarketVolume.reduce((sum, d) => sum + (d.volume || 0), 0);
+  const marketVolSeries = {
+    name: 'Market Volume (kg)',
+    type: 'line',
+    data: integrationLocations.map(() => parseFloat(totalMarketVol.toFixed(0)))
+  };
+
+  const integrationSeries = [...barSeries, estProductionSeries, marketVolSeries];
+
+  const integrationChartOptions = {
+    chart: {
+      type: 'line',
+      height: 420,
+      toolbar: { show: true },
+      background: 'transparent',
+      fontFamily: 'Inter, sans-serif',
+    },
+    theme: { mode: darkMode ? 'dark' : 'light' },
+    stroke: {
+      width: integrationSeries.map(s => s.type === 'line' ? 3 : 0),
+      curve: 'smooth',
+      dashArray: integrationSeries.map((s, i) => {
+        if (s.name.includes('Market')) return 6;
+        if (s.name.includes('Est.')) return 3;
+        return 0;
+      }),
+    },
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 3 } },
+    colors: [...COLORS.slice(0, vegTypes.length), '#f59e0b', '#ef4444'],
+    dataLabels: { enabled: false },
+    markers: {
+      size: integrationSeries.map(s => s.type === 'line' ? 4 : 0),
+      hover: { size: 6 }
+    },
+    xaxis: {
+      categories: integrationLocations,
+      title: { text: 'Location (Barangay)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+      labels: { rotate: -35, style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '11px' } },
+    },
+    yaxis: [
+      {
+        seriesName: barSeries[0]?.name,
+        title: { text: 'Hectares (ha)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+        labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' }, formatter: v => `${v} ha` },
+        min: 0,
+      },
+      {
+        opposite: true,
+        seriesName: 'Est. Production (kg)',
+        title: { text: 'Volume / Est. Production (kg)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+        labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b' }, formatter: v => `${(v/1000).toFixed(1)}k kg` },
+        min: 0,
+      },
+    ],
+    legend: { position: 'top', horizontalAlign: 'left' },
+    grid: { borderColor: darkMode ? '#1e293b' : '#e7e7e7', strokeDashArray: 4 },
+    tooltip: {
+      shared: true,
+      intersect: false,
+      y: {
+        formatter: (val, { seriesIndex }) => {
+          const s = integrationSeries[seriesIndex];
+          if (!s) return val;
+          if (s.type === 'column') return `${val} ha`;
+          return `${val.toLocaleString()} kg`;
+        }
+      }
+    },
+  };
+
+  // ============================================================================
+  // TOP 10 HIGH PRODUCTION CROPS BY HECTARES
+  // ============================================================================
+
+  const top10CropsData = (() => {
+    const cropHectares = {};
+    farmersData.forEach(farmer => {
+      const ha = Number(farmer.hectares) || 0;
+      if (farmer.mainCrops) {
+        Object.values(farmer.mainCrops).forEach(crop => {
+          if (crop?.name) {
+            cropHectares[crop.name] = (cropHectares[crop.name] || 0) + ha;
+          }
+        });
+      } else if (farmer.vegetable && farmer.vegetable !== 'N/A') {
+        cropHectares[farmer.vegetable] = (cropHectares[farmer.vegetable] || 0) + ha;
+      }
+    });
+    return Object.entries(cropHectares)
+      .map(([name, hectares]) => ({ name, hectares }))
+      .sort((a, b) => b.hectares - a.hectares)
+      .slice(0, 10);
+  })();
+
+  const top10CropsOptions = {
+    ...commonChartOptions,
+    chart: { ...commonChartOptions.chart, type: 'bar' },
+    colors: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'],
+    plotOptions: {
+      bar: {
+        horizontal: true,
+        borderRadius: 5,
+        distributed: true,
+        barHeight: '65%',
+        dataLabels: { position: 'top' },
+      }
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: val => `${val} ha`,
+      offsetX: 5,
+      style: { fontSize: '12px', colors: [darkMode ? '#e2e8f0' : '#374151'], fontWeight: 600 },
+    },
+    xaxis: {
+      categories: top10CropsData.map(c => c.name),
+      labels: {
+        style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '12px' },
+        formatter: val => `${val} ha`,
+      },
+      title: { text: 'Total Planted Area (ha)', style: { color: darkMode ? '#94a3b8' : '#64748b' } },
+    },
+    yaxis: {
+      labels: { style: { colors: darkMode ? '#94a3b8' : '#64748b', fontSize: '13px', fontWeight: 600 } },
+    },
+    legend: { show: false },
+    tooltip: {
+      y: { formatter: val => `${val} ha` },
+    },
+    grid: { borderColor: darkMode ? '#1e293b' : '#e7e7e7', strokeDashArray: 4 },
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
@@ -343,6 +694,158 @@ const AgriDashboard = () => {
             </div>
             <ReactApexChart options={cropTrendsOptions} series={[{ name: 'Farmers', data: farmerCropTrends.map(item => item.count) }]} type="bar" height={320} />
           </div>
+        </div>
+
+        {/* Top 10 High Production Crops by Hectares */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+              <FaSeedling className="text-emerald-600 dark:text-emerald-400 text-lg" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Top 10 High Production Crop Commodities Grown in the City</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Ranked by total planted area (hectares) across all farmers</p>
+            </div>
+          </div>
+          {top10CropsData.length > 0 ? (
+            <ReactApexChart
+              options={top10CropsOptions}
+              series={[{ name: 'Total Hectares', data: top10CropsData.map(c => parseFloat(c.hectares.toFixed(2))) }]}
+              type="bar"
+              height={420}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-10">No crop data available</p>
+          )}
+        </div>
+
+        {/* Production vs Market Volume Integration Chart */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <FaChartLine className="text-purple-600 dark:text-purple-400 text-lg" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Production vs Market Volume</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Bars = hectares per location · Dashed = estimated production · Red = recorded market volume
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <FaFilter className="text-gray-400 text-xs" />
+                <select
+                  value={integrationVegFilter}
+                  onChange={e => setIntegrationVegFilter(e.target.value)}
+                  className={`text-sm rounded-lg border p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+                >
+                  <option value="all">All Vegetables</option>
+                  {allFarmerVegs.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <select
+                value={integrationYearFilter}
+                onChange={e => { setIntegrationYearFilter(e.target.value); setIntegrationMonthFilter('all'); setIntegrationWeekFilter('all'); }}
+                className={`text-sm rounded-lg border p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+              >
+                <option value="all">All Years</option>
+                {allMarketYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <select
+                value={integrationMonthFilter}
+                onChange={e => { setIntegrationMonthFilter(e.target.value); setIntegrationWeekFilter('all'); }}
+                className={`text-sm rounded-lg border p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+              >
+                <option value="all">All Months</option>
+                {allMarketMonths.map(m => <option key={m} value={m}>{MONTH_NAMES_SHORT[m - 1]}</option>)}
+              </select>
+              <select
+                value={integrationWeekFilter}
+                onChange={e => setIntegrationWeekFilter(e.target.value)}
+                className={`text-sm rounded-lg border p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
+              >
+                <option value="all">All Weeks</option>
+                {allMarketWeeks.map(w => <option key={w} value={w}>Week {w}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Summary pills */}
+          <div className="flex flex-wrap gap-3 mb-5">
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${darkMode ? "bg-slate-800 text-slate-300" : "bg-gray-100 text-gray-700"}`}>
+              🌾 Total Hectares: {filteredFarmerData.reduce((s, f) => s + (Number(f.hectares) || 0), 0).toFixed(2)} ha
+            </span>
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
+              📦 Est. Production: {(filteredFarmerData.reduce((s, f) => s + (Number(f.hectares) || 0), 0) * AVG_YIELD_KG_PER_HA).toLocaleString()} kg
+            </span>
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${darkMode ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-700"}`}>
+              🏪 Market Volume: {totalMarketVol.toLocaleString()} kg
+            </span>
+            {totalMarketVol > 0 && (
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700"}`}>
+                📊 Supply Ratio: {((filteredFarmerData.reduce((s, f) => s + (Number(f.hectares) || 0), 0) * AVG_YIELD_KG_PER_HA) / totalMarketVol * 100).toFixed(1)}%
+              </span>
+            )}
+          </div>
+
+          {integrationLocations.length > 0 ? (
+            <ReactApexChart
+              options={integrationChartOptions}
+              series={integrationSeries}
+              type="line"
+              height={420}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-10">No data — add farmers with location and vegetable info</p>
+          )}
+        </div>
+
+        {/* Hectares by Farmer & Vegetable */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <FaChartBar className="text-green-600 dark:text-green-400 text-lg" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Hectares by Farmer & Vegetable</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Farm size per farmer, color-coded by crop type</p>
+            </div>
+          </div>
+          {farmerHectaresSeries.length > 0 ? (
+            <ReactApexChart
+              options={farmerHectaresOptions}
+              series={farmerHectaresSeries}
+              type="line"
+              height={350}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-10">No farmer data available</p>
+          )}
+        </div>
+
+        {/* Hectares by Location */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-teal-50 dark:bg-teal-900/20 rounded-lg">
+              <FaMapMarkedAlt className="text-teal-600 dark:text-teal-400 text-lg" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Hectares by Location</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Total farm area per barangay — hover to see farmers</p>
+            </div>
+          </div>
+          {locationLabels.length > 0 ? (
+            <ReactApexChart
+              options={locationChartOptions}
+              series={[{ name: 'Total Hectares', data: locationHectares }]}
+              type="line"
+              height={300}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-10">No location data available</p>
+          )}
         </div>
 
         {/* Map & Information Grid */}

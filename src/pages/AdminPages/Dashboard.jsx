@@ -49,7 +49,7 @@ const Dashboard = () => {
   // Core state
   const [dashboardData, setDashboardData] = useState(null);
   const [selectedCommodity, setSelectedCommodity] = useState('');
-  const [selectedDataType, setSelectedDataType] = useState('volume');
+  const [selectedDataType, setSelectedDataType] = useState('price');
   const [forecastMode, setForecastMode] = useState('weekly');
   const [periodsAhead, setPeriodsAhead] = useState(4);
   const [forecastResult, setForecastResult] = useState(null);
@@ -59,11 +59,11 @@ const Dashboard = () => {
 
   // Chart state
   const [chartCommodity, setChartCommodity] = useState('');
-  const [selectedWeekRange, setSelectedWeekRange] = useState('1-5');
+  const [selectedChartMonth, setSelectedChartMonth] = useState('all');
 
   // Comparison state
   const [comparisonCommodities, setComparisonCommodities] = useState([]);
-  const [comparisonDataType, setComparisonDataType] = useState('volume');
+  const [comparisonDataType, setComparisonDataType] = useState('price');
 
   // Model management states
   const [modelInfo, setModelInfo] = useState(null);
@@ -74,10 +74,14 @@ const Dashboard = () => {
   // Notification state
   const [notifications, setNotifications] = useState([]);
 
+  // Projected volume state
+  const [projectedVolume, setProjectedVolume] = useState(null);
+  const [projectedVolumeLoading, setProjectedVolumeLoading] = useState(false);
+
   // Overview filters
   const [overviewYearFilter, setOverviewYearFilter] = useState('all');
   const [overviewCommodityFilter, setOverviewCommodityFilter] = useState('all');
-  const [overviewDataView, setOverviewDataView] = useState('volume');
+  const [overviewDataView, setOverviewDataView] = useState('price');
   const [chartYearFilter, setChartYearFilter] = useState('all');
   const [comparisonYearFilter, setComparisonYearFilter] = useState('all');
   const [overviewMonthFilter, setOverviewMonthFilter] = useState('all');
@@ -156,6 +160,56 @@ const Dashboard = () => {
       setPeriodsAhead(12);
     }
   }, [forecastMode]);
+
+  // Auto-fetch projected volume when chartCommodity changes
+  useEffect(() => {
+    const fetchProjectedVolume = async () => {
+      if (!chartCommodity || !dashboardData) return;
+
+      setProjectedVolumeLoading(true);
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/forecast`, {
+          commodity: chartCommodity,
+          data_type: 'volume',
+          weeks_ahead: 4
+        });
+        
+        // Sum the next 4 weeks forecast
+        const totalProjected = response.data.forecast_data.reduce((sum, item) => sum + item.value, 0);
+        
+        // Get current month total for comparison
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const baseCommodity = getBaseCommodityName(chartCommodity);
+        
+        const currentMonthVolume = dashboardData.volume_data
+          .filter(d => 
+            getBaseCommodityName(d.commodity) === baseCommodity &&
+            d.year === currentYear &&
+            d.month === currentMonth
+          )
+          .reduce((sum, item) => sum + (item.volume || 0), 0);
+        
+        const trend = currentMonthVolume > 0 
+          ? ((totalProjected - currentMonthVolume) / currentMonthVolume) * 100 
+          : 0;
+        
+        setProjectedVolume({
+          total: totalProjected,
+          trend: trend,
+          currentMonth: currentMonthVolume
+        });
+      } catch (err) {
+        console.log('Projected volume unavailable:', err.response?.data?.detail || err.message);
+        setProjectedVolume(null);
+      } finally {
+        setProjectedVolumeLoading(false);
+      }
+    };
+
+    fetchProjectedVolume();
+  }, [chartCommodity, dashboardData]);
 
   const fetchDashboardData = async () => {
     try {
@@ -350,9 +404,10 @@ const Dashboard = () => {
 
   const sentimentData = useMemo(() => {
     if (!dashboardData || !chartCommodity) return { score: 0, label: 'No Data' };
+    const baseChartCommodity = getBaseCommodityName(chartCommodity);
     
     const commodityPrices = dashboardData.price_data.filter(
-      item => getBaseCommodityName(item.commodity) === chartCommodity
+      item => getBaseCommodityName(item.commodity) === baseChartCommodity
     );
     
     if (commodityPrices.length < 2) return { score: 50, label: 'Stable' };
@@ -396,10 +451,9 @@ const Dashboard = () => {
     addNotification('Generating forecast...', 'info');
 
     try {
-      // FIX 2: Include forecast_mode in request body
-      // FIX 3: Send full commodity name (with unit suffix) so backend can match it
+      // Send the full commodity name so backend can match it exactly in Supabase
       const requestBody = {
-        commodity: formatCommodityName(selectedCommodity),
+        commodity: selectedCommodity,
         data_type: selectedDataType,
         forecast_mode: forecastMode,
         weeks_ahead: safePeriodsAhead
@@ -590,12 +644,12 @@ CONFIG = {
 
     const csvRows = [
       ['Period', 'Year', 'Month', 'Week', 'Value', 'Type'],
-      ...forecastResult.forecast_data.map(item => [
+      ...forecastResult.forecast_data.filter(item => item.week !== 5).map(item => [
         formatPeriod(item, forecastResult.forecast_mode),
         item.year,
         item.month,
         item.week,
-        item.value.toFixed(2),
+        forecastResult.data_type === 'volume' ? (item.value / 1000).toFixed(4) : item.value.toFixed(2),
         'Forecast'
       ])
     ];
@@ -615,6 +669,11 @@ CONFIG = {
   // SUMMARY STATS
   // ============================================================================
 
+  const formatVolume = (kg) => {
+    if (kg >= 1000) return { value: (kg / 1000).toFixed(3), unit: 'MT' };
+    return { value: kg.toFixed(2), unit: 'Kg' };
+  };
+
   const getSummaryStats = () => {
     if (!dashboardData) return null;
 
@@ -625,76 +684,91 @@ CONFIG = {
 
     return {
       totalWeeks: dashboardData.volume_data.length + dashboardData.price_data.length,
-      totalVolume: volumeTotal.toFixed(2),
+      totalVolume: (volumeTotal / 1000).toFixed(2),
       avgPrice: priceAvg.toFixed(2),
       commoditiesCount: dashboardData.uniqueCommodities.length
     };
   };
 
   // ============================================================================
-  // WEEK RANGE UTILITIES
-  // ============================================================================
-
-  const weekRanges = [
-    { value: '1-5', label: 'Weeks 1-5' },
-    { value: '6-10', label: 'Weeks 6-10' },
-    { value: '11-15', label: 'Weeks 11-15' },
-    { value: '16-20', label: 'Weeks 16-20' },
-    { value: '21-25', label: 'Weeks 21-25' },
-    { value: '26-30', label: 'Weeks 26-30' }
-  ];
-
-  const getWeeksInRange = () => {
-    const [start, end] = selectedWeekRange.split('-').map(Number);
-    const weeks = [];
-    for (let i = start; i <= end; i++) {
-      weeks.push(`Week ${i}`);
-    }
-    return weeks;
-  };
-
-  // ============================================================================
   // CHART DATA FUNCTIONS
   // ============================================================================
+
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   const getCommodityChartData = () => {
     if (!dashboardData || !chartCommodity) return null;
 
-    const weeks = getWeeksInRange();
-    const [startWeek] = selectedWeekRange.split('-').map(Number);
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const baseChartCommodity = getBaseCommodityName(chartCommodity);
 
+    const allYears = chartYearFilter === 'all'
+      ? [...new Set(dashboardData.price_data
+          .filter(d => getBaseCommodityName(d.commodity) === baseChartCommodity)
+          .map(d => d.year))].sort()
+      : [parseInt(chartYearFilter)];
+
+    const latestYear = allYears[allYears.length - 1];
+
+    // --- WEEKLY DRILL-DOWN: a specific month is selected ---
+    if (selectedChartMonth !== 'all') {
+      const month = parseInt(selectedChartMonth);
+      const categories = [];
+      const volumeData = [];
+      const priceData = [];
+
+      for (let week = 1; week <= 4; week++) {
+        const volRows = dashboardData.volume_data.filter(d =>
+          getBaseCommodityName(d.commodity) === baseChartCommodity &&
+          d.year === latestYear && d.month === month && d.week === week
+        );
+        const priceRows = dashboardData.price_data.filter(d =>
+          getBaseCommodityName(d.commodity) === baseChartCommodity &&
+          d.year === latestYear && d.month === month && d.week === week
+        );
+
+        // Only include weeks that have data
+        if (volRows.length === 0 && priceRows.length === 0) continue;
+
+        const volAvg = volRows.length
+          ? volRows.reduce((s, d) => s + (d.volume || 0), 0) / volRows.length : 0;
+        const priceAvg = priceRows.length
+          ? priceRows.reduce((s, d) => s + (d.average_price || 0), 0) / priceRows.length : 0;
+
+        categories.push(`Week ${week}`);
+        volumeData.push(parseFloat(volAvg.toFixed(2)));
+        priceData.push(parseFloat(priceAvg.toFixed(2)));
+      }
+
+      return { categories, volumeData, priceData, drillMode: true, month, year: latestYear };
+    }
+
+    // --- DEFAULT: monthly overview ---
     const categories = [];
     const volumeData = [];
     const priceData = [];
 
-    weeks.forEach((weekLabel, index) => {
-      const weekNumber = startWeek + index;
-
-      const volItem = dashboardData.volume_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity &&
-          item.week === weekNumber &&
-          (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
+    for (let month = 1; month <= 12; month++) {
+      const volRows = dashboardData.volume_data.filter(d =>
+        getBaseCommodityName(d.commodity) === baseChartCommodity &&
+        d.month === month && d.year === latestYear
+      );
+      const priceRows = dashboardData.price_data.filter(d =>
+        getBaseCommodityName(d.commodity) === baseChartCommodity &&
+        d.month === month && d.year === latestYear
       );
 
-      const priceItem = dashboardData.price_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity &&
-          item.week === weekNumber &&
-          (chartYearFilter === 'all' || item.year === parseInt(chartYearFilter))
-      );
+      const volAvg = volRows.length
+        ? volRows.reduce((s, d) => s + (d.volume || 0), 0) / volRows.length : 0;
+      const priceAvg = priceRows.length
+        ? priceRows.reduce((s, d) => s + (d.average_price || 0), 0) / priceRows.length : 0;
 
-      volumeData.push(volItem ? volItem.volume : 0);
-      priceData.push(priceItem ? priceItem.average_price : 0);
+      categories.push(`${MONTH_NAMES[month - 1]} ${latestYear}`);
+      volumeData.push(parseFloat(volAvg.toFixed(2)));
+      priceData.push(parseFloat(priceAvg.toFixed(2)));
+    }
 
-      const item = volItem || priceItem;
-      if (item && item.month && item.year) {
-        categories.push([`Week ${weekNumber}`, `${monthNames[item.month - 1]} ${item.year}`]);
-      } else {
-        categories.push(`Week ${weekNumber}`);
-      }
-    });
-
-    return { categories, volumeData, priceData };
+    return { categories, volumeData, priceData, drillMode: false };
   };
 
   // ============================================================================
@@ -705,6 +779,10 @@ CONFIG = {
     const chartData = getCommodityChartData();
     if (!chartData) return { series: [], options: {} };
 
+    const title = chartData.drillMode 
+      ? `📦 ${chartCommodity} - ${MONTH_NAMES_FULL[chartData.month - 1]} ${chartData.year} Weekly Volume`
+      : `📦 ${chartCommodity} - Monthly Avg Volume`;
+
     return {
       series: [{ name: 'Volume (Kg)', data: chartData.volumeData }],
       options: {
@@ -712,12 +790,11 @@ CONFIG = {
         plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
         colors: ['#3b82f6'],
         dataLabels: {
-          enabled: true,
-          formatter: function (val) { return val.toFixed(1) + ' Kg'; }
+          enabled: false,
         },
-        xaxis: { categories: chartData.categories },
+        xaxis: { categories: chartData.categories, labels: { rotate: -45 } },
         yaxis: { title: { text: 'Volume (Kg)' } },
-        title: { text: `📦 ${chartCommodity} - Weekly Volume`, align: 'left' }
+        title: { text: title, align: 'left' }
       }
     };
   };
@@ -726,6 +803,10 @@ CONFIG = {
     const chartData = getCommodityChartData();
     if (!chartData) return { series: [], options: {} };
 
+    const title = chartData.drillMode 
+      ? `💰 ${chartCommodity} - ${MONTH_NAMES_FULL[chartData.month - 1]} ${chartData.year} Weekly Price`
+      : `💰 ${chartCommodity} - Monthly Avg Price`;
+
     return {
       series: [{ name: 'Price (₱)', data: chartData.priceData }],
       options: {
@@ -733,12 +814,11 @@ CONFIG = {
         plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
         colors: ['#10b981'],
         dataLabels: {
-          enabled: true,
-          formatter: function (val) { return '₱' + val.toFixed(2); }
+          enabled: false,
         },
-        xaxis: { categories: chartData.categories },
+        xaxis: { categories: chartData.categories, labels: { rotate: -45 } },
         yaxis: { title: { text: 'Price (₱)' } },
-        title: { text: `💰 ${chartCommodity} - Weekly Price`, align: 'left' }
+        title: { text: title, align: 'left' }
       }
     };
   };
@@ -748,12 +828,13 @@ CONFIG = {
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const commodity = comparisonCommodities[0];
+    const baseCommodity = getBaseCommodityName(commodity);
     const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
 
     // Get all years available for this commodity
     const years = [...new Set(
       sourceData
-        .filter(d => getBaseCommodityName(d.commodity) === commodity)
+        .filter(d => getBaseCommodityName(d.commodity) === baseCommodity)
         .map(d => d.year)
     )].sort();
 
@@ -762,7 +843,7 @@ CONFIG = {
       const monthlyData = Array.from({ length: 12 }, (_, mi) => {
         const month = mi + 1;
         const rows = sourceData.filter(d =>
-          getBaseCommodityName(d.commodity) === commodity &&
+          getBaseCommodityName(d.commodity) === baseCommodity &&
           d.year === year && d.month === month
         );
         if (!rows.length) return null;
@@ -808,11 +889,12 @@ CONFIG = {
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const commodity = comparisonCommodities[0];
+    const baseCommodity = getBaseCommodityName(commodity);
     const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
 
     const years = [...new Set(
       sourceData
-        .filter(d => getBaseCommodityName(d.commodity) === commodity)
+        .filter(d => getBaseCommodityName(d.commodity) === baseCommodity)
         .map(d => d.year)
     )].sort();
 
@@ -820,7 +902,7 @@ CONFIG = {
       const monthlyData = Array.from({ length: 12 }, (_, mi) => {
         const month = mi + 1;
         const rows = sourceData.filter(d =>
-          getBaseCommodityName(d.commodity) === commodity &&
+          getBaseCommodityName(d.commodity) === baseCommodity &&
           d.year === year && d.month === month
         );
         if (!rows.length) return null;
@@ -862,13 +944,14 @@ CONFIG = {
 
   const getMixedComparisonChart = () => {
     if (!dashboardData || !chartCommodity) return { series: [], options: {} };
+    const baseChartCommodity = getBaseCommodityName(chartCommodity);
 
-    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
 
     const volumeData = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.volume_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === baseChartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.volume : 0;
     });
@@ -876,7 +959,7 @@ CONFIG = {
     const priceData = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === baseChartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.average_price : 0;
     });
@@ -957,13 +1040,14 @@ CONFIG = {
 
   const getStackedPriceChart = () => {
     if (!dashboardData || !chartCommodity) return { series: [], options: {} };
+    const baseChartCommodity = getBaseCommodityName(chartCommodity);
 
-    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
 
     const lowestPrices = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === baseChartCommodity && item.week === weekNumber
       );
       return dataPoint ? dataPoint.lowest_price : 0;
     });
@@ -971,7 +1055,7 @@ CONFIG = {
     const priceRanges = weeks.map((_, weekIndex) => {
       const weekNumber = weekIndex + 1;
       const dataPoint = dashboardData.price_data.find(
-        item => getBaseCommodityName(item.commodity) === chartCommodity && item.week === weekNumber
+        item => getBaseCommodityName(item.commodity) === baseChartCommodity && item.week === weekNumber
       );
       return dataPoint ? (dataPoint.highest_price - dataPoint.lowest_price) : 0;
     });
@@ -1026,10 +1110,17 @@ CONFIG = {
     if (!forecastResult) return { series: [], options: {} };
 
     const mode = forecastResult.forecast_mode || 'weekly';
-    const historicalCategories = forecastResult.historical_data.slice(-12).map(item => formatPeriod(item, mode));
-    const historicalValues = forecastResult.historical_data.slice(-12).map(item => item.value);
-    const forecastCategories = forecastResult.forecast_data.map(item => formatPeriod(item, mode));
-    const forecastValues = forecastResult.forecast_data.map(item => item.value);
+    const isVolume = forecastResult.data_type === 'volume';
+
+    const filteredHistorical = forecastResult.historical_data.slice(-12).filter(item => item.week !== 5);
+    const filteredForecast = forecastResult.forecast_data.filter(item => item.week !== 5);
+
+    const toMT = val => isVolume ? val / 1000 : val;
+
+    const historicalCategories = filteredHistorical.map(item => formatPeriod(item, mode));
+    const historicalValues = filteredHistorical.map(item => toMT(item.value));
+    const forecastCategories = filteredForecast.map(item => formatPeriod(item, mode));
+    const forecastValues = filteredForecast.map(item => toMT(item.value));
 
     const allCategories = [...historicalCategories, ...forecastCategories];
     const historicalSeries = [...historicalValues, ...Array(forecastValues.length).fill(null)];
@@ -1053,7 +1144,7 @@ CONFIG = {
           labels: { rotate: -45, rotateAlways: true }
         },
         yaxis: {
-          title: { text: forecastResult.data_type === 'price' ? 'Price (₱)' : 'Volume (Kg)' }
+          title: { text: forecastResult.data_type === 'price' ? 'Price (₱)' : 'Volume (MT)' }
         },
         title: {
           text: `🔮 ${mode.charAt(0).toUpperCase() + mode.slice(1)} Forecast: ${forecastResult.commodity}`,
@@ -1148,7 +1239,7 @@ CONFIG = {
             <div className="flex items-center justify-between">
               <div>
                 <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Total Volume</p>
-                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>{stats?.totalVolume || 0}</p>
+                <p className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>{stats?.totalVolume || 0} <span className="text-sm font-normal">MT</span></p>
               </div>
               <div className="text-4xl opacity-80">📦</div>
             </div>
@@ -1341,7 +1432,7 @@ CONFIG = {
                         className={`w-full px-3 py-2 ${darkMode ? "bg-slate-800 border-slate-700 text-white focus:ring-blue-500/50" : "bg-white border-gray-300 focus:ring-blue-500 text-gray-900"} border rounded-lg focus:ring-2 transition-colors`}
                       >
                         <option value="all" className={darkMode ? "bg-slate-800" : "bg-white"}>All Weeks</option>
-                        {[1, 2, 3, 4, 5].map(w => (
+                        {[1, 2, 3, 4].map(w => (
                           <option key={w} value={w} className={darkMode ? "bg-slate-800" : "bg-white"}>Week {w}</option>
                         ))}
                       </select>
@@ -1421,9 +1512,7 @@ CONFIG = {
                   <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
                     <p className={`text-[10px] font-bold ${darkMode ? "text-slate-500" : "text-slate-400"} uppercase tracking-[0.15em] mb-1`}>Filtered Volume</p>
                     <p className={`text-2xl font-black ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
-                      {(overviewDataView === 'volume' ? (analyzeVolumeData || []) : [])
-                        .reduce((sum, item) => sum + item.totalVolume, 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      <span className={`text-xs ml-1 font-bold ${darkMode ? "text-slate-600" : "text-slate-300"}`}>Kg</span>
+                      {(() => { const kg = (overviewDataView === 'volume' ? (analyzeVolumeData || []) : []).reduce((sum, item) => sum + item.totalVolume, 0); const fmt = formatVolume(kg); return <>{fmt.value}<span className={`text-xs ml-1 font-bold ${darkMode ? "text-slate-600" : "text-slate-300"}`}>{fmt.unit}</span></>; })()}
                     </p>
                   </div>
                   <div className={`${darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} p-5 rounded-2xl border shadow-sm transition-colors`}>
@@ -1477,7 +1566,7 @@ CONFIG = {
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Period</th>
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Week</th>
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Month/Year</th>
-                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Total Volume (Kg)</th>
+                            <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Total Volume</th>
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Commodities</th>
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Completeness</th>
                             <th className={`px-6 py-3 text-left text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase tracking-wider`}>Details</th>
@@ -1505,8 +1594,7 @@ CONFIG = {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
-                                    <span className={`text-lg font-black ${darkMode ? "text-blue-400" : "text-blue-700"}`}>{item.totalVolume.toFixed(2)}</span>
-                                    <span className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>Kg</span>
+                                    {(() => { const fmt = formatVolume(item.totalVolume); return <><span className={`text-lg font-black ${darkMode ? "text-blue-400" : "text-blue-700"}`}>{fmt.value}</span><span className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>{fmt.unit}</span></>; })()}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1537,7 +1625,7 @@ CONFIG = {
                                     {Object.entries(item.commodities).map(([commodity, volume]) => (
                                       <div key={commodity} className="flex justify-between gap-4">
                                         <span className={darkMode ? "text-slate-400" : "text-gray-600"}>{formatCommodityName(commodity)}:</span>
-                                        <span className={`font-bold ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{volume.toFixed(2)} Kg</span>
+                                        <span className={`font-bold ${darkMode ? "text-slate-200" : "text-gray-900"}`}>{(() => { const fmt = formatVolume(volume); return `${fmt.value} ${fmt.unit}`; })()}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1558,7 +1646,7 @@ CONFIG = {
                         <div>
                           <span className={darkMode ? "text-slate-500" : "text-gray-600"}>Total Volume:</span>
                           <span className={`ml-2 font-black ${darkMode ? "text-blue-400" : "text-blue-700"}`}>
-                            {analyzeVolumeData.reduce((sum, item) => sum + item.totalVolume, 0).toFixed(2)} Kg
+                            {(() => { const kg = analyzeVolumeData.reduce((sum, item) => sum + item.totalVolume, 0); const fmt = formatVolume(kg); return `${fmt.value} ${fmt.unit}`; })()}
                           </span>
                         </div>
                         <div>
@@ -1672,23 +1760,16 @@ CONFIG = {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className="text-xs space-y-2 max-w-sm">
+                                  <div className="text-xs space-y-2 min-w-[200px]">
                                     {Object.entries(item.commodities).map(([commodity, prices]) => (
-                                      <div key={commodity} className={`border-l-2 ${darkMode ? "border-green-800" : "border-green-200"} pl-2`}>
-                                        <div className={`font-bold ${darkMode ? "text-slate-200" : "text-gray-900"} mb-1`}>{formatCommodityName(commodity)}</div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                          <div>
-                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>LP:</span>
-                                            <span className={`ml-1 ${darkMode ? "text-rose-400" : "text-red-600"} font-bold`}>₱{prices.lowest.toFixed(2)}</span>
-                                          </div>
-                                          <div>
-                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>HP:</span>
-                                            <span className={`ml-1 ${darkMode ? "text-emerald-400" : "text-emerald-600"} font-bold`}>₱{prices.highest.toFixed(2)}</span>
-                                          </div>
-                                          <div>
-                                            <span className={darkMode ? "text-slate-500" : "text-gray-500"}>AP:</span>
-                                            <span className={`ml-1 ${darkMode ? "text-green-500" : "text-green-700"} font-bold`}>₱{prices.average.toFixed(2)}</span>
-                                          </div>
+                                      <div key={commodity} className={`border-l-2 ${darkMode ? "border-green-800" : "border-green-200"} pl-2 py-1`}>
+                                        <div className={`font-bold text-[11px] ${darkMode ? "text-slate-200" : "text-gray-900"} mb-1 truncate max-w-[180px]`} title={formatCommodityName(commodity)}>
+                                          {formatCommodityName(commodity)}
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                          <span className={darkMode ? "text-slate-500" : "text-gray-500"}>LP: <span className={`font-bold ${darkMode ? "text-rose-400" : "text-red-600"}`}>₱{prices.lowest.toFixed(2)}</span></span>
+                                          <span className={darkMode ? "text-slate-500" : "text-gray-500"}>HP: <span className={`font-bold ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>₱{prices.highest.toFixed(2)}</span></span>
+                                          <span className={darkMode ? "text-slate-500" : "text-gray-500"}>AP: <span className={`font-bold ${darkMode ? "text-green-500" : "text-green-700"}`}>₱{prices.average.toFixed(2)}</span></span>
                                         </div>
                                       </div>
                                     ))}
@@ -1907,20 +1988,22 @@ CONFIG = {
                       These plots show how the LSTM models perform on historical data for each commodity.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {dashboardData.uniqueCommodities.map(commodity => (
+                      {dashboardData.uniqueCommodities.map(commodity => {
+                        const plotName = getBaseCommodityName(commodity).toLowerCase().replace(/\s+/g, '_');
+                        return (
                         <div key={commodity} className={`space-y-4 ${darkMode ? "bg-slate-800/50 border-slate-700" : "bg-gray-50 border-gray-100"} p-4 rounded-xl border transition-colors`}>
                           <div className={`text-sm font-black ${darkMode ? "text-slate-300" : "text-gray-700"} pb-2 border-b ${darkMode ? "border-slate-700" : "border-gray-200"} mb-2`}>{formatCommodityName(commodity)}</div>
 
                           <div className={`border ${darkMode ? "border-slate-700" : "border-gray-200"} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all bg-white`}>
                             <div className={`${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"} px-3 py-1 text-[10px] font-black uppercase`}>Price Model</div>
                             <img
-                              src={`${API_BASE_URL}/plots/global_model_${commodity.toLowerCase()}_price_training.png`}
+                              src={`${API_BASE_URL}/plots/global_model_${plotName}_price_training.png`}
                               alt={`${commodity} Price`}
                               className={`w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity ${darkMode ? "invert opacity-80" : ""}`}
                               onError={(e) => {
                                 const currentSrc = e.target.src;
                                 if (currentSrc.includes('global_model_')) {
-                                  e.target.src = `${API_BASE_URL}/plots/${commodity.toLowerCase()}_price_training.png`;
+                                  e.target.src = `${API_BASE_URL}/plots/${plotName}_price_training.png`;
                                 } else {
                                   e.target.parentElement.style.display = 'none';
                                 }
@@ -1932,7 +2015,7 @@ CONFIG = {
                           <div className={`border ${darkMode ? "border-slate-700" : "border-gray-200"} rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all bg-white`}>
                             <div className={`${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-green-50 text-green-600"} px-3 py-1 text-[10px] font-black uppercase`}>Volume Model</div>
                             <img
-                              src={`${API_BASE_URL}/plots/${commodity.toLowerCase()}_volume_training.png`}
+                              src={`${API_BASE_URL}/plots/${plotName}_volume_training.png`}
                               alt={`${commodity} Volume`}
                               className={`w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity ${darkMode ? "invert opacity-80" : ""}`}
                               onError={(e) => { e.target.parentElement.style.display = 'none'; }}
@@ -1940,7 +2023,8 @@ CONFIG = {
                             />
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1970,14 +2054,15 @@ CONFIG = {
                         </select>
                       </div>
                       <div className="flex items-center gap-2">
-                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Week Range:</label>
+                        <label className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-gray-500"} uppercase`}>Month:</label>
                         <select
-                          value={selectedWeekRange}
-                          onChange={(e) => setSelectedWeekRange(e.target.value)}
+                          value={selectedChartMonth}
+                          onChange={(e) => setSelectedChartMonth(e.target.value)}
                           className={`text-sm rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent p-2 outline-none transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-gray-300 text-gray-700"}`}
                         >
-                          {['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-52'].map(range => (
-                            <option key={range} value={range}>Week {range}</option>
+                          <option value="all">All Months (Overview)</option>
+                          {MONTH_NAMES_FULL.map((month, idx) => (
+                            <option key={idx + 1} value={idx + 1}>{month}</option>
                           ))}
                         </select>
                       </div>
@@ -2013,7 +2098,7 @@ CONFIG = {
                       </div>
                     </div>
 
-                    <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className={`${darkMode ? "bg-slate-800/30 border-slate-700" : "bg-white border-gray-100"} rounded-xl p-4 border transition-colors`}>
                         <p className={`text-[10px] ${darkMode ? "text-slate-500" : "text-gray-500"} uppercase font-black mb-1`}>Total Volume</p>
                         <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
@@ -2031,6 +2116,25 @@ CONFIG = {
                         <p className={`text-xl font-black ${darkMode ? "text-slate-200" : "text-gray-900"}`}>
                           {dashboardData?.commodityDetails?.[chartCommodity]?.count} weeks
                         </p>
+                      </div>
+                      <div className={`${darkMode ? "bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-blue-700/50" : "bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200"} rounded-xl p-4 border transition-all relative overflow-hidden`}>
+                        <div className={`absolute top-0 right-0 p-3 text-3xl opacity-10 ${darkMode ? "text-blue-400" : "text-blue-600"}`}>🔮</div>
+                        <p className={`text-[10px] ${darkMode ? "text-blue-400" : "text-blue-700"} uppercase font-black mb-1`}>Projected Next Month</p>
+                        {projectedVolumeLoading ? (
+                          <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-500"}`}>Loading...</p>
+                        ) : projectedVolume ? (
+                          <>
+                            <p className={`text-xl font-black ${darkMode ? "text-blue-300" : "text-blue-700"}`}>
+                              {projectedVolume.total.toFixed(0)} <span className="text-xs font-normal">Kg</span>
+                            </p>
+                            <div className={`mt-2 flex items-center gap-1 text-xs font-bold ${projectedVolume.trend >= 0 ? (darkMode ? 'text-green-400' : 'text-green-600') : (darkMode ? 'text-red-400' : 'text-red-600')}`}>
+                              <span>{projectedVolume.trend >= 0 ? '↑' : '↓'}</span>
+                              <span>{Math.abs(projectedVolume.trend).toFixed(1)}% vs current</span>
+                            </div>
+                          </>
+                        ) : (
+                          <p className={`text-xs ${darkMode ? "text-slate-500" : "text-gray-500"}`}>No volume data</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2124,17 +2228,18 @@ CONFIG = {
 
                 {comparisonCommodities.length > 0 && (() => {
                   const commodity = comparisonCommodities[0];
+                  const baseCommodity = getBaseCommodityName(commodity);
                   const sourceData = comparisonDataType === 'volume' ? dashboardData.volume_data : dashboardData.price_data;
                   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
                   const years = [...new Set(
-                    sourceData.filter(d => getBaseCommodityName(d.commodity) === commodity).map(d => d.year)
+                    sourceData.filter(d => getBaseCommodityName(d.commodity) === baseCommodity).map(d => d.year)
                   )].sort();
 
                   const tableData = monthNames.map((month, mi) => {
                     const row = { month };
                     years.forEach(year => {
                       const rows = sourceData.filter(d =>
-                        getBaseCommodityName(d.commodity) === commodity &&
+                        getBaseCommodityName(d.commodity) === baseCommodity &&
                         d.year === year && d.month === mi + 1
                       );
                       const vals = rows.map(d => comparisonDataType === 'volume' ? d.volume : d.average_price).filter(v => v != null);
@@ -2259,13 +2364,15 @@ CONFIG = {
                           </tr>
                         </thead>
                         <tbody className={`${darkMode ? "bg-slate-900" : "bg-white"} divide-y ${darkMode ? "divide-slate-800" : "divide-gray-200"}`}>
-                          {forecastResult.forecast_data.map((item, idx) => (
+                          {forecastResult.forecast_data.filter(item => item.week !== 5).map((item, idx) => (
                             <tr key={idx} className={`${darkMode ? "hover:bg-slate-800/50" : "hover:bg-gray-50"} transition-colors`}>
                               <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${darkMode ? "text-slate-300" : "text-gray-900"}`}>
                                 {formatPeriod(item, forecastResult.forecast_mode || 'weekly')}
                               </td>
                               <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${darkMode ? "text-green-400" : "text-green-700"}`}>
-                                {item.value.toFixed(2)} {forecastResult.data_type === 'price' ? '₱' : 'Kg'}
+                                {forecastResult.data_type === 'volume'
+                                  ? (item.value / 1000).toFixed(4) + ' MT'
+                                  : '₱' + item.value.toFixed(2)}
                               </td>
                             </tr>
                           ))}

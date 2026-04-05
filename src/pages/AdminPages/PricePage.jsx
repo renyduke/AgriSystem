@@ -175,6 +175,7 @@ const PricePage = () => {
     }
     const weekSet = new Map();
     filtered.forEach(d => {
+      if (d.week === 5) return; // no week 5
       const key = `${d.year}-${d.month}-${d.week}`;
       if (!weekSet.has(key)) {
         weekSet.set(key, {
@@ -208,6 +209,7 @@ const PricePage = () => {
     if (selectedWeek !== 'all') {
       filteredData = filteredData.filter(d => d.week === parseInt(selectedWeek));
     }
+    filteredData = filteredData.filter(d => d.week !== 5);
 
     const weeklyGroups = {};
     filteredData.forEach(item => {
